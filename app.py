@@ -248,6 +248,74 @@ def fetch_stock_news_direct(symbol):
     
     return news_items[:10]
 
+def fetch_finviz_insider_data(symbol):
+    """
+    Fetch insider trading data from Finviz as a fallback/additional source.
+    Returns a list of insider transactions.
+    """
+    insider_data = []
+    
+    try:
+        url = f"https://finviz.com/quote.ashx?t={symbol}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            
+            # Find insider trading table
+            insider_table = soup.find('table', class_='body-table')
+            if not insider_table:
+                # Try alternate table selector
+                tables = soup.find_all('table')
+                for table in tables:
+                    if 'Insider Trading' in str(table) or 'insider' in str(table).lower():
+                        insider_table = table
+                        break
+            
+            if insider_table:
+                rows = insider_table.find_all('tr')[1:]  # Skip header
+                for row in rows[:10]:
+                    cols = row.find_all('td')
+                    if len(cols) >= 6:
+                        try:
+                            insider_data.append({
+                                'owner': cols[0].text.strip()[:25],
+                                'relationship': cols[1].text.strip() if len(cols) > 1 else '',
+                                'date': cols[2].text.strip() if len(cols) > 2 else '',
+                                'transaction': cols[3].text.strip() if len(cols) > 3 else '',
+                                'cost': cols[4].text.strip() if len(cols) > 4 else '',
+                                'shares': cols[5].text.strip() if len(cols) > 5 else '',
+                                'value': cols[6].text.strip() if len(cols) > 6 else '',
+                            })
+                        except:
+                            continue
+            
+            # Also try to get additional metrics
+            metrics = {}
+            snapshot_table = soup.find('table', class_='snapshot-table2')
+            if snapshot_table:
+                rows = snapshot_table.find_all('tr')
+                for row in rows:
+                    cols = row.find_all('td')
+                    for i in range(0, len(cols) - 1, 2):
+                        try:
+                            label = cols[i].text.strip()
+                            value = cols[i+1].text.strip()
+                            if label and value:
+                                metrics[label] = value
+                        except:
+                            continue
+            
+            return {'transactions': insider_data, 'metrics': metrics}
+    except:
+        pass
+    
+    return {'transactions': [], 'metrics': {}}
+
 @st.cache_data(ttl=300)
 def fetch_comprehensive_data(symbol):
     try:
@@ -265,7 +333,11 @@ def fetch_comprehensive_data(symbol):
             'earnings': None, 
             'recommendations': None, 
             'calendar': None, 
-            'holders': None
+            'holders': None,
+            'insider_transactions': None,
+            'insider_roster': None,
+            'major_holders': None,
+            'options_data': None,
         }
         
         # Fetch news using dedicated function with multiple fallbacks
@@ -318,6 +390,57 @@ def fetch_comprehensive_data(symbol):
             h = ticker.institutional_holders
             if h is not None and not h.empty: data['holders'] = h
         except: pass
+        
+        # === INSTITUTIONAL ACTIVITY DATA ===
+        
+        # Insider Transactions (buys/sells)
+        try:
+            insider_txns = ticker.insider_transactions
+            if insider_txns is not None and not insider_txns.empty:
+                data['insider_transactions'] = insider_txns
+        except: pass
+        
+        # Insider Roster (who holds what)
+        try:
+            insider_roster = ticker.insider_roster_holders
+            if insider_roster is not None and not insider_roster.empty:
+                data['insider_roster'] = insider_roster
+        except: pass
+        
+        # Major Holders (ownership breakdown)
+        try:
+            major = ticker.major_holders
+            if major is not None and not major.empty:
+                data['major_holders'] = major
+        except: pass
+        
+        # Options data for unusual activity detection
+        try:
+            if ticker.options:
+                # Get nearest expiration
+                nearest_exp = ticker.options[0]
+                opt_chain = ticker.option_chain(nearest_exp)
+                
+                # Combine calls and puts
+                calls_df = opt_chain.calls.copy()
+                calls_df['type'] = 'call'
+                puts_df = opt_chain.puts.copy()
+                puts_df['type'] = 'put'
+                
+                data['options_data'] = {
+                    'expiration': nearest_exp,
+                    'calls': calls_df,
+                    'puts': puts_df,
+                }
+        except: pass
+        
+        # Fetch Finviz data for additional insights (insider data fallback)
+        try:
+            finviz_data = fetch_finviz_insider_data(symbol)
+            if finviz_data:
+                data['finviz_data'] = finviz_data
+        except: pass
+        
         return data
     except: return None
 
@@ -646,6 +769,320 @@ def generate_detailed_signals(hist, info):
             })
     
     return signals
+
+def analyze_institutional_activity(data, current_price):
+    """
+    Analyze institutional activity including insider transactions, options flow, and ownership.
+    Returns a dictionary with whale/institutional signals.
+    """
+    activity = {
+        'insider_sentiment': 'neutral',
+        'insider_transactions': [],
+        'insider_buy_count': 0,
+        'insider_sell_count': 0,
+        'insider_net_value': 0,
+        'institutional_ownership': 0,
+        'insider_ownership': 0,
+        'unusual_options': [],
+        'options_sentiment': 'neutral',
+        'call_volume': 0,
+        'put_volume': 0,
+        'put_call_ratio': 0,
+        'whale_signals': [],
+        'overall_signal': 'neutral',
+        'short_interest': 0,
+        'short_ratio': 0,
+        'avg_volume': 0,
+        'relative_volume': 0,
+        'dark_pool_estimate': 0,
+        'block_trades': [],
+        'finviz_data': {},
+    }
+    
+    info = data.get('info', {})
+    
+    # === OWNERSHIP DATA ===
+    activity['institutional_ownership'] = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
+    activity['insider_ownership'] = info.get('heldPercentInsiders', 0) * 100 if info.get('heldPercentInsiders') else 0
+    
+    # === SHORT INTEREST DATA ===
+    activity['short_interest'] = info.get('shortPercentOfFloat', 0) * 100 if info.get('shortPercentOfFloat') else 0
+    activity['short_ratio'] = info.get('shortRatio', 0) if info.get('shortRatio') else 0
+    
+    # === VOLUME ANALYSIS ===
+    activity['avg_volume'] = info.get('averageVolume', 0)
+    current_volume = info.get('volume', 0)
+    if activity['avg_volume'] > 0:
+        activity['relative_volume'] = current_volume / activity['avg_volume']
+    
+    # === DARK POOL ESTIMATE ===
+    # Dark pools typically handle 35-40% of total equity volume
+    # We estimate based on relative volume and institutional ownership
+    if activity['institutional_ownership'] > 50 and activity['avg_volume'] > 1000000:
+        activity['dark_pool_estimate'] = 38  # High institutional = more dark pool
+    elif activity['institutional_ownership'] > 30:
+        activity['dark_pool_estimate'] = 35
+    else:
+        activity['dark_pool_estimate'] = 30
+    
+    # Major holders breakdown
+    major_holders = data.get('major_holders')
+    if major_holders is not None and not major_holders.empty:
+        try:
+            for idx, row in major_holders.iterrows():
+                if 'insider' in str(row.values).lower():
+                    activity['insider_ownership'] = float(str(row.iloc[0]).replace('%', '')) if '%' in str(row.iloc[0]) else 0
+                elif 'institution' in str(row.values).lower():
+                    activity['institutional_ownership'] = float(str(row.iloc[0]).replace('%', '')) if '%' in str(row.iloc[0]) else 0
+        except:
+            pass
+    
+    # === INSIDER TRANSACTIONS ===
+    insider_txns = data.get('insider_transactions')
+    has_insider_data = insider_txns is not None and not insider_txns.empty
+    
+    # If no Yahoo data, try Finviz as fallback
+    finviz_data = data.get('finviz_data', {})
+    
+    if has_insider_data:
+        buy_value = 0
+        sell_value = 0
+        recent_txns = []
+        
+        for idx, row in insider_txns.head(15).iterrows():
+            try:
+                # Get transaction details
+                insider_name = row.get('Insider', row.get('insider', row.get('Name', 'Unknown')))
+                txn_type = str(row.get('Transaction', row.get('transaction', row.get('Text', '')))).lower()
+                shares = abs(float(row.get('Shares', row.get('shares', row.get('Value', 0)))))
+                value = abs(float(row.get('Value', row.get('value', shares * current_price))))
+                
+                # Determine if buy or sell
+                is_buy = any(word in txn_type for word in ['buy', 'purchase', 'acquisition', 'exercise'])
+                is_sell = any(word in txn_type for word in ['sell', 'sale', 'disposition'])
+                
+                if is_buy:
+                    activity['insider_buy_count'] += 1
+                    buy_value += value
+                    recent_txns.append({
+                        'name': str(insider_name)[:20],
+                        'type': 'BUY',
+                        'shares': shares,
+                        'value': value,
+                        'color': '#3fb950'
+                    })
+                elif is_sell:
+                    activity['insider_sell_count'] += 1
+                    sell_value += value
+                    recent_txns.append({
+                        'name': str(insider_name)[:20],
+                        'type': 'SELL',
+                        'shares': shares,
+                        'value': value,
+                        'color': '#f85149'
+                    })
+            except:
+                continue
+        
+        activity['insider_transactions'] = recent_txns[:6]
+        activity['insider_net_value'] = buy_value - sell_value
+        
+        # Determine insider sentiment
+        if activity['insider_buy_count'] > activity['insider_sell_count'] * 2:
+            activity['insider_sentiment'] = 'strongly bullish'
+            activity['whale_signals'].append(('🟢', 'Heavy insider buying detected'))
+        elif activity['insider_buy_count'] > activity['insider_sell_count']:
+            activity['insider_sentiment'] = 'bullish'
+            activity['whale_signals'].append(('🟢', 'Net insider buying'))
+        elif activity['insider_sell_count'] > activity['insider_buy_count'] * 2:
+            activity['insider_sentiment'] = 'strongly bearish'
+            activity['whale_signals'].append(('🔴', 'Heavy insider selling detected'))
+        elif activity['insider_sell_count'] > activity['insider_buy_count']:
+            activity['insider_sentiment'] = 'bearish'
+            activity['whale_signals'].append(('🟡', 'Net insider selling'))
+    
+    elif finviz_data.get('transactions'):
+        # Use Finviz data as fallback
+        recent_txns = []
+        for txn in finviz_data['transactions'][:10]:
+            try:
+                txn_type = txn.get('transaction', '').lower()
+                is_buy = 'buy' in txn_type or 'purchase' in txn_type
+                is_sell = 'sale' in txn_type or 'sell' in txn_type
+                
+                # Parse value
+                value_str = txn.get('value', '0').replace('$', '').replace(',', '')
+                try:
+                    value = float(value_str) if value_str else 0
+                except:
+                    value = 0
+                
+                if is_buy:
+                    activity['insider_buy_count'] += 1
+                    recent_txns.append({
+                        'name': txn.get('owner', 'Unknown')[:20],
+                        'type': 'BUY',
+                        'shares': 0,
+                        'value': value,
+                        'color': '#3fb950'
+                    })
+                elif is_sell:
+                    activity['insider_sell_count'] += 1
+                    recent_txns.append({
+                        'name': txn.get('owner', 'Unknown')[:20],
+                        'type': 'SELL',
+                        'shares': 0,
+                        'value': value,
+                        'color': '#f85149'
+                    })
+            except:
+                continue
+        
+        activity['insider_transactions'] = recent_txns[:6]
+        
+        if activity['insider_buy_count'] > activity['insider_sell_count']:
+            activity['insider_sentiment'] = 'bullish'
+            activity['whale_signals'].append(('🟢', 'Net insider buying (Finviz)'))
+        elif activity['insider_sell_count'] > activity['insider_buy_count']:
+            activity['insider_sentiment'] = 'bearish'
+            activity['whale_signals'].append(('🟡', 'Net insider selling (Finviz)'))
+    
+    # === UNUSUAL OPTIONS ACTIVITY ===
+    options_data = data.get('options_data')
+    if options_data:
+        calls = options_data.get('calls')
+        puts = options_data.get('puts')
+        
+        unusual_options = []
+        total_call_volume = 0
+        total_put_volume = 0
+        
+        if calls is not None and not calls.empty:
+            for idx, row in calls.iterrows():
+                try:
+                    volume = int(row.get('volume', 0)) if pd.notna(row.get('volume')) else 0
+                    open_interest = int(row.get('openInterest', 1)) if pd.notna(row.get('openInterest')) and row.get('openInterest', 0) > 0 else 1
+                    strike = float(row.get('strike', 0))
+                    
+                    total_call_volume += volume
+                    
+                    # Unusual activity: volume > 2x open interest
+                    if volume > open_interest * 2 and volume > 1000:
+                        unusual_options.append({
+                            'type': 'CALL',
+                            'strike': strike,
+                            'volume': volume,
+                            'oi': open_interest,
+                            'ratio': volume / open_interest,
+                            'otm': strike > current_price,
+                            'color': '#3fb950'
+                        })
+                except:
+                    continue
+        
+        if puts is not None and not puts.empty:
+            for idx, row in puts.iterrows():
+                try:
+                    volume = int(row.get('volume', 0)) if pd.notna(row.get('volume')) else 0
+                    open_interest = int(row.get('openInterest', 1)) if pd.notna(row.get('openInterest')) and row.get('openInterest', 0) > 0 else 1
+                    strike = float(row.get('strike', 0))
+                    
+                    total_put_volume += volume
+                    
+                    # Unusual activity: volume > 2x open interest
+                    if volume > open_interest * 2 and volume > 1000:
+                        unusual_options.append({
+                            'type': 'PUT',
+                            'strike': strike,
+                            'volume': volume,
+                            'oi': open_interest,
+                            'ratio': volume / open_interest,
+                            'otm': strike < current_price,
+                            'color': '#f85149'
+                        })
+                except:
+                    continue
+        
+        # Sort by volume and take top unusual options
+        unusual_options.sort(key=lambda x: x['volume'], reverse=True)
+        activity['unusual_options'] = unusual_options[:5]
+        
+        activity['call_volume'] = total_call_volume
+        activity['put_volume'] = total_put_volume
+        
+        # Put/Call ratio
+        if total_call_volume > 0:
+            activity['put_call_ratio'] = total_put_volume / total_call_volume
+        
+        # Options sentiment
+        if activity['put_call_ratio'] < 0.5:
+            activity['options_sentiment'] = 'bullish'
+            activity['whale_signals'].append(('🟢', f'Low put/call ratio ({activity["put_call_ratio"]:.2f})'))
+        elif activity['put_call_ratio'] > 1.5:
+            activity['options_sentiment'] = 'bearish'
+            activity['whale_signals'].append(('🔴', f'High put/call ratio ({activity["put_call_ratio"]:.2f})'))
+        
+        # Check for unusual call buying (bullish)
+        unusual_calls = [o for o in unusual_options if o['type'] == 'CALL' and o['otm']]
+        unusual_puts = [o for o in unusual_options if o['type'] == 'PUT' and o['otm']]
+        
+        if len(unusual_calls) >= 2:
+            activity['whale_signals'].append(('🟢', f'{len(unusual_calls)} unusual OTM call sweeps'))
+        if len(unusual_puts) >= 2:
+            activity['whale_signals'].append(('🔴', f'{len(unusual_puts)} unusual OTM put sweeps'))
+    
+    # === INSTITUTIONAL OWNERSHIP SIGNALS ===
+    if activity['institutional_ownership'] > 90:
+        activity['whale_signals'].append(('🟡', f'Very high institutional ownership ({activity["institutional_ownership"]:.1f}%)'))
+    elif activity['institutional_ownership'] > 70:
+        activity['whale_signals'].append(('🟢', f'Strong institutional ownership ({activity["institutional_ownership"]:.1f}%)'))
+    elif activity['institutional_ownership'] < 20:
+        activity['whale_signals'].append(('🟡', f'Low institutional ownership ({activity["institutional_ownership"]:.1f}%)'))
+    
+    if activity['insider_ownership'] > 20:
+        activity['whale_signals'].append(('🟢', f'High insider ownership ({activity["insider_ownership"]:.1f}%)'))
+    
+    # === SHORT INTEREST SIGNALS ===
+    if activity['short_interest'] > 20:
+        activity['whale_signals'].append(('🔴', f'High short interest ({activity["short_interest"]:.1f}%) - potential squeeze or bearish'))
+    elif activity['short_interest'] > 10:
+        activity['whale_signals'].append(('🟡', f'Elevated short interest ({activity["short_interest"]:.1f}%)'))
+    
+    if activity['short_ratio'] > 5:
+        activity['whale_signals'].append(('🟡', f'High days-to-cover ({activity["short_ratio"]:.1f} days)'))
+    
+    # === VOLUME SIGNALS ===
+    if activity['relative_volume'] > 3:
+        activity['whale_signals'].append(('🔥', f'Extreme volume ({activity["relative_volume"]:.1f}x avg) - whale activity likely'))
+    elif activity['relative_volume'] > 2:
+        activity['whale_signals'].append(('🟢', f'High relative volume ({activity["relative_volume"]:.1f}x avg)'))
+    elif activity['relative_volume'] < 0.5:
+        activity['whale_signals'].append(('🟡', f'Low volume ({activity["relative_volume"]:.1f}x avg) - lack of interest'))
+    
+    # === OVERALL SIGNAL ===
+    bullish_signals = sum(1 for s in activity['whale_signals'] if s[0] == '🟢')
+    bearish_signals = sum(1 for s in activity['whale_signals'] if s[0] == '🔴')
+    fire_signals = sum(1 for s in activity['whale_signals'] if s[0] == '🔥')
+    
+    # Fire signals are strong but need context
+    if fire_signals > 0:
+        # High volume can be bullish or bearish - check price direction from data
+        hist = data.get('hist_1d')
+        if hist is not None and len(hist) > 1:
+            price_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[0]) / hist['Close'].iloc[0] * 100
+            if price_change > 1:
+                bullish_signals += fire_signals
+            elif price_change < -1:
+                bearish_signals += fire_signals
+    
+    if bullish_signals > bearish_signals + 1:
+        activity['overall_signal'] = 'bullish'
+    elif bearish_signals > bullish_signals + 1:
+        activity['overall_signal'] = 'bearish'
+    else:
+        activity['overall_signal'] = 'neutral'
+    
+    return activity
 
 def generate_expert_analysis(symbol, data, signals, support_levels, resistance_levels, news_sentiment):
     """Generate AI expert analysis synthesizing all available data."""
@@ -2132,6 +2569,270 @@ def render_stock_report(symbol):
             st.markdown("### 📈 Fundamentals")
             for l, v in [("EPS (TTM)", f"${info.get('trailingEps', 0):.2f}" if info.get('trailingEps') else "N/A"), ("Fwd EPS", f"${info.get('forwardEps', 0):.2f}" if info.get('forwardEps') else "N/A"), ("Rev Growth", f"{info.get('revenueGrowth', 0)*100:.1f}%" if info.get('revenueGrowth') else "N/A"), ("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%" if info.get('profitMargins') else "N/A"), ("ROE", f"{info.get('returnOnEquity', 0)*100:.1f}%" if info.get('returnOnEquity') else "N/A"), ("Debt/Equity", f"{info.get('debtToEquity', 0)/100:.2f}" if info.get('debtToEquity') else "N/A")]:
                 st.markdown(f"<div style='display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.85rem;'><span style='color:#8b949e;'>{l}</span><span style='color:#fff;'>{v}</span></div>", unsafe_allow_html=True)
+    
+    # === INSTITUTIONAL ACTIVITY / WHALE TRACKER SECTION ===
+    st.markdown("---")
+    st.markdown("### 🐋 Institutional Activity & Whale Tracker")
+    st.markdown("<p style='color: #8b949e; font-size: 0.8rem;'>Insider transactions, options flow, and institutional ownership signals</p>", unsafe_allow_html=True)
+    
+    # Analyze institutional activity
+    inst_activity = analyze_institutional_activity(data, price)
+    
+    # Overall signal banner
+    signal = inst_activity['overall_signal']
+    if signal == 'bullish':
+        signal_color = '#3fb950'
+        signal_bg = 'rgba(63,185,80,0.1)'
+        signal_text = '🟢 BULLISH INSTITUTIONAL FLOW'
+    elif signal == 'bearish':
+        signal_color = '#f85149'
+        signal_bg = 'rgba(248,81,73,0.1)'
+        signal_text = '🔴 BEARISH INSTITUTIONAL FLOW'
+    else:
+        signal_color = '#d29922'
+        signal_bg = 'rgba(210,153,34,0.1)'
+        signal_text = '🟡 NEUTRAL INSTITUTIONAL FLOW'
+    
+    st.markdown(f"""
+    <div style="background: {signal_bg}; border: 1px solid {signal_color}; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; text-align: center;">
+        <span style="color: {signal_color}; font-weight: 700; font-size: 1rem;">{signal_text}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Whale signals summary
+    if inst_activity['whale_signals']:
+        st.markdown("#### 🎯 Key Whale Signals")
+        signal_cols = st.columns(min(3, len(inst_activity['whale_signals'])))
+        for i, (emoji, signal_text) in enumerate(inst_activity['whale_signals'][:6]):
+            with signal_cols[i % 3]:
+                bg_color = 'rgba(63,185,80,0.15)' if emoji == '🟢' else 'rgba(248,81,73,0.15)' if emoji == '🔴' else 'rgba(210,153,34,0.15)'
+                st.markdown(f"""
+                <div style="background: {bg_color}; border-radius: 6px; padding: 0.5rem; margin: 0.25rem 0; text-align: center;">
+                    <span style="font-size: 0.8rem;">{emoji} {signal_text}</span>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Three columns: Ownership | Insider Activity | Options Flow
+    whale_col1, whale_col2, whale_col3 = st.columns(3)
+    
+    with whale_col1:
+        st.markdown("#### 🏛️ Ownership")
+        inst_own = inst_activity['institutional_ownership']
+        insider_own = inst_activity['insider_ownership']
+        
+        # Institutional ownership bar
+        inst_color = '#3fb950' if inst_own > 60 else '#d29922' if inst_own > 30 else '#f85149'
+        st.markdown(f"""
+        <div style="margin-bottom: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.25rem;">
+                <span style="color: #8b949e;">Institutional</span>
+                <span style="color: {inst_color}; font-weight: 600;">{inst_own:.1f}%</span>
+            </div>
+            <div style="background: rgba(48,54,61,0.5); border-radius: 4px; height: 8px; overflow: hidden;">
+                <div style="background: {inst_color}; width: {min(inst_own, 100)}%; height: 100%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Insider ownership bar
+        insider_color = '#3fb950' if insider_own > 10 else '#d29922' if insider_own > 3 else '#8b949e'
+        st.markdown(f"""
+        <div style="margin-bottom: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.25rem;">
+                <span style="color: #8b949e;">Insider</span>
+                <span style="color: {insider_color}; font-weight: 600;">{insider_own:.1f}%</span>
+            </div>
+            <div style="background: rgba(48,54,61,0.5); border-radius: 4px; height: 8px; overflow: hidden;">
+                <div style="background: {insider_color}; width: {min(insider_own * 2, 100)}%; height: 100%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Top institutional holders
+        holders = data.get('holders')
+        if holders is not None and not holders.empty:
+            st.markdown("<p style='color: #8b949e; font-size: 0.7rem; margin-top: 0.5rem;'>Top Holders:</p>", unsafe_allow_html=True)
+            for idx, row in holders.head(3).iterrows():
+                holder_name = str(row.get('Holder', row.get('holder', 'Unknown')))[:25]
+                st.markdown(f"<p style='color: #c9d1d9; font-size: 0.75rem; margin: 0.1rem 0;'>• {holder_name}</p>", unsafe_allow_html=True)
+    
+    with whale_col2:
+        st.markdown("#### 👔 Insider Activity")
+        
+        buy_count = inst_activity['insider_buy_count']
+        sell_count = inst_activity['insider_sell_count']
+        net_value = inst_activity['insider_net_value']
+        
+        # Buy/Sell summary
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-around; margin-bottom: 0.75rem;">
+            <div style="text-align: center;">
+                <div style="color: #3fb950; font-size: 1.2rem; font-weight: 700;">{buy_count}</div>
+                <div style="color: #8b949e; font-size: 0.7rem;">Buys</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="color: #f85149; font-size: 1.2rem; font-weight: 700;">{sell_count}</div>
+                <div style="color: #8b949e; font-size: 0.7rem;">Sells</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Net value
+        net_color = '#3fb950' if net_value > 0 else '#f85149' if net_value < 0 else '#8b949e'
+        net_text = f"+${net_value/1e6:.1f}M" if net_value >= 1e6 else f"+${net_value/1e3:.0f}K" if net_value > 0 else f"-${abs(net_value)/1e6:.1f}M" if net_value <= -1e6 else f"-${abs(net_value)/1e3:.0f}K" if net_value < 0 else "$0"
+        
+        st.markdown(f"""
+        <div style="text-align: center; margin-bottom: 0.5rem;">
+            <span style="color: #8b949e; font-size: 0.75rem;">Net Insider Flow: </span>
+            <span style="color: {net_color}; font-weight: 600;">{net_text}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Recent transactions
+        if inst_activity['insider_transactions']:
+            st.markdown("<p style='color: #8b949e; font-size: 0.7rem;'>Recent Transactions:</p>", unsafe_allow_html=True)
+            for txn in inst_activity['insider_transactions'][:4]:
+                val_str = f"${txn['value']/1e6:.1f}M" if txn['value'] >= 1e6 else f"${txn['value']/1e3:.0f}K"
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0; border-bottom: 1px solid rgba(48,54,61,0.5);">
+                    <span style="color: {txn['color']};">{txn['type']}</span>
+                    <span style="color: #8b949e;">{val_str}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<p style='color: #6e7681; font-size: 0.75rem; font-style: italic;'>No recent insider transactions</p>", unsafe_allow_html=True)
+    
+    with whale_col3:
+        st.markdown("#### 📊 Options Flow")
+        
+        call_vol = inst_activity['call_volume']
+        put_vol = inst_activity['put_volume']
+        pc_ratio = inst_activity['put_call_ratio']
+        
+        # Volume summary
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-around; margin-bottom: 0.75rem;">
+            <div style="text-align: center;">
+                <div style="color: #3fb950; font-size: 1.1rem; font-weight: 700;">{call_vol/1e3:.0f}K</div>
+                <div style="color: #8b949e; font-size: 0.7rem;">Call Vol</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="color: #f85149; font-size: 1.1rem; font-weight: 700;">{put_vol/1e3:.0f}K</div>
+                <div style="color: #8b949e; font-size: 0.7rem;">Put Vol</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Put/Call ratio
+        pc_color = '#3fb950' if pc_ratio < 0.7 else '#f85149' if pc_ratio > 1.3 else '#d29922'
+        pc_sentiment = 'Bullish' if pc_ratio < 0.7 else 'Bearish' if pc_ratio > 1.3 else 'Neutral'
+        
+        st.markdown(f"""
+        <div style="text-align: center; margin-bottom: 0.5rem;">
+            <span style="color: #8b949e; font-size: 0.75rem;">P/C Ratio: </span>
+            <span style="color: {pc_color}; font-weight: 600;">{pc_ratio:.2f}</span>
+            <span style="color: {pc_color}; font-size: 0.7rem;"> ({pc_sentiment})</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Unusual options activity
+        if inst_activity['unusual_options']:
+            st.markdown("<p style='color: #8b949e; font-size: 0.7rem;'>🔥 Unusual Activity:</p>", unsafe_allow_html=True)
+            for opt in inst_activity['unusual_options'][:3]:
+                otm_label = "OTM" if opt['otm'] else "ITM"
+                st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0; border-bottom: 1px solid rgba(48,54,61,0.5);">
+                    <span style="color: {opt['color']};">{opt['type']} ${opt['strike']:.0f} {otm_label}</span>
+                    <span style="color: #8b949e;">{opt['volume']/1e3:.1f}K vol ({opt['ratio']:.1f}x OI)</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<p style='color: #6e7681; font-size: 0.75rem; font-style: italic;'>No unusual options activity</p>", unsafe_allow_html=True)
+    
+    # === DARK POOL & SHORT INTEREST ROW ===
+    st.markdown("#### 🌑 Dark Pool & Short Interest Estimates")
+    dp_col1, dp_col2, dp_col3, dp_col4 = st.columns(4)
+    
+    with dp_col1:
+        dark_pool_est = inst_activity['dark_pool_estimate']
+        dp_color = '#a371f7'
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: center; padding: 0.75rem;">
+            <div style="color: {dp_color}; font-size: 1.3rem; font-weight: 700;">{dark_pool_est}%</div>
+            <div style="color: #8b949e; font-size: 0.7rem;">Est. Dark Pool Vol</div>
+            <div style="color: #6e7681; font-size: 0.6rem; font-style: italic;">~{dark_pool_est}% of volume</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with dp_col2:
+        short_int = inst_activity['short_interest']
+        short_color = '#f85149' if short_int > 15 else '#d29922' if short_int > 8 else '#3fb950'
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: center; padding: 0.75rem;">
+            <div style="color: {short_color}; font-size: 1.3rem; font-weight: 700;">{short_int:.1f}%</div>
+            <div style="color: #8b949e; font-size: 0.7rem;">Short Interest</div>
+            <div style="color: #6e7681; font-size: 0.6rem;">% of float shorted</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with dp_col3:
+        short_ratio = inst_activity['short_ratio']
+        sr_color = '#f85149' if short_ratio > 5 else '#d29922' if short_ratio > 3 else '#3fb950'
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: center; padding: 0.75rem;">
+            <div style="color: {sr_color}; font-size: 1.3rem; font-weight: 700;">{short_ratio:.1f}</div>
+            <div style="color: #8b949e; font-size: 0.7rem;">Days to Cover</div>
+            <div style="color: #6e7681; font-size: 0.6rem;">Short ratio</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with dp_col4:
+        rel_vol = inst_activity['relative_volume']
+        rv_color = '#3fb950' if rel_vol > 1.5 else '#d29922' if rel_vol > 0.8 else '#f85149'
+        rv_label = "High" if rel_vol > 1.5 else "Normal" if rel_vol > 0.8 else "Low"
+        st.markdown(f"""
+        <div class="metric-card" style="text-align: center; padding: 0.75rem;">
+            <div style="color: {rv_color}; font-size: 1.3rem; font-weight: 700;">{rel_vol:.2f}x</div>
+            <div style="color: #8b949e; font-size: 0.7rem;">Relative Volume</div>
+            <div style="color: #6e7681; font-size: 0.6rem;">{rv_label} vs avg</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Whale Activity Interpretation
+    st.markdown("#### 📊 Institutional Flow Analysis")
+    
+    # Build interpretation based on signals
+    interpretations = []
+    
+    if inst_activity['short_interest'] > 15:
+        interpretations.append(f"⚠️ **High Short Interest** ({inst_activity['short_interest']:.1f}%): Significant bearish bets against this stock. Watch for short squeeze potential if positive catalysts emerge.")
+    elif inst_activity['short_interest'] > 8:
+        interpretations.append(f"📊 **Elevated Short Interest** ({inst_activity['short_interest']:.1f}%): Moderate short positioning indicates some bearish sentiment among institutional traders.")
+    
+    if inst_activity['relative_volume'] > 2:
+        interpretations.append(f"🔥 **Unusual Volume** ({inst_activity['relative_volume']:.1f}x avg): Heavy institutional activity detected. Large players are actively trading this name.")
+    
+    if inst_activity['insider_buy_count'] > inst_activity['insider_sell_count'] and inst_activity['insider_buy_count'] > 0:
+        interpretations.append(f"✅ **Net Insider Buying**: Insiders have made {inst_activity['insider_buy_count']} purchase(s) vs {inst_activity['insider_sell_count']} sale(s). Management showing confidence.")
+    elif inst_activity['insider_sell_count'] > inst_activity['insider_buy_count'] * 2:
+        interpretations.append(f"🚨 **Heavy Insider Selling**: {inst_activity['insider_sell_count']} insider sales detected. May indicate reduced confidence or planned diversification.")
+    
+    if inst_activity['put_call_ratio'] < 0.5:
+        interpretations.append(f"📈 **Bullish Options Flow**: P/C ratio of {inst_activity['put_call_ratio']:.2f} indicates options traders are positioned for upside.")
+    elif inst_activity['put_call_ratio'] > 1.5:
+        interpretations.append(f"📉 **Bearish Options Flow**: P/C ratio of {inst_activity['put_call_ratio']:.2f} shows heavy put buying—either hedging or bearish speculation.")
+    
+    if inst_activity['institutional_ownership'] > 80:
+        interpretations.append(f"🏛️ **Heavily Institutionalized** ({inst_activity['institutional_ownership']:.1f}%): Stock movements likely driven by institutional rebalancing and fund flows.")
+    
+    if not interpretations:
+        interpretations.append("📊 **Neutral Flow**: No significant whale signals detected. Institutional activity appears normal for this security.")
+    
+    st.markdown(f"""
+    <div style="background: rgba(33,38,45,0.5); border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
+        {'<br>'.join(interpretations)}
+    </div>
+    """, unsafe_allow_html=True)
     
     with st.expander("📖 About", expanded=False):
         st.markdown(info.get('longBusinessSummary', info.get('description', 'No description available.')))
