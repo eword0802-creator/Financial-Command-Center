@@ -4576,119 +4576,140 @@ def render_stock_report(symbol):
             reward_per_share = trade_struct.get('reward_per_share', 0)
             rr_ratio = expert.get('risk_reward', 0)
             
-            # Bias colors
+            # Pre-compute colors
             bias_color = '#00ff41' if bias == 'LONG' else '#ff3b30' if bias == 'SHORT' else '#ffcc00'
             bias_bg = 'rgba(0,255,65,0.15)' if bias == 'LONG' else 'rgba(255,59,48,0.15)' if bias == 'SHORT' else 'rgba(255,204,0,0.15)'
+            rr_color = '#00ff41' if rr_ratio >= 2 else '#ffcc00' if rr_ratio >= 1.5 else '#ff6b6b'
+            pos_size_color = '#ffcc00' if position_size == 'REDUCED' else '#00ff41'
             
-            # Terminal header
+            # Terminal Header
             st.markdown(f"""
-            <div style="background: #0a0a0a; border: 1px solid #333; border-radius: 4px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; overflow: hidden;">
-                <!-- Terminal Title Bar -->
-                <div style="background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%); padding: 0.5rem 1rem; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+            <div style="background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%); padding: 0.6rem 1rem; border: 1px solid #333; border-radius: 4px 4px 0 0; display: flex; justify-content: space-between; align-items: center; font-family: 'Consolas', 'Monaco', monospace;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="color: #ff9500; font-weight: 700;">◆ TRADE SETUP</span>
+                    <span style="color: #666;">|</span>
+                    <span style="color: {bias_color}; font-weight: 700; font-size: 1.1rem;">{bias}</span>
+                    <span style="background: {bias_bg}; color: {bias_color}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600;">{bias_strength}</span>
+                </div>
+                <div style="color: #666; font-size: 0.75rem;">{symbol} • ${current_price:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Entry Zone
+            st.markdown(f"""
+            <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.75rem 1rem; font-family: 'Consolas', 'Monaco', monospace;">
+                <div style="color: #666; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Entry Zone</div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="color: #00ff41; font-size: 1.2rem; font-weight: 600;">${entry_low:.2f}</span>
+                    <span style="color: #444;">—</span>
+                    <span style="color: #00ff41; font-size: 1.2rem; font-weight: 600;">${entry_high:.2f}</span>
+                    <span style="color: #444; font-size: 0.7rem; margin-left: 0.5rem;">▼ BUY ZONE</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Stop Loss
+            st.markdown(f"""
+            <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.5rem 1rem; font-family: 'Consolas', 'Monaco', monospace; border-top: 1px solid #222;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="color: #ff3b30; font-size: 0.75rem;">⛔ STOP LOSS</span>
+                    </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <span style="color: #ff9500; font-weight: 700; font-size: 0.9rem;">◆ TRADE SETUP</span>
-                        <span style="color: #666; font-size: 0.75rem;">|</span>
-                        <span style="color: {bias_color}; font-weight: 700; font-size: 1.1rem;">{bias}</span>
-                        <span style="background: {bias_bg}; color: {bias_color}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600;">{bias_strength}</span>
-                    </div>
-                    <div style="color: #666; font-size: 0.7rem;">
-                        {symbol} • ${current_price:.2f}
+                        <span style="color: #ff3b30; font-size: 1.1rem; font-weight: 700;">${stop_loss:.2f}</span>
+                        <span style="background: rgba(255,59,48,0.2); color: #ff6b6b; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">-{stop_pct:.1f}%</span>
+                        <span style="color: #555; font-size: 0.7rem;">RISK: ${risk_per_share:.2f}/sh</span>
                     </div>
                 </div>
-                
-                <!-- Main Terminal Content -->
-                <div style="padding: 1rem; background: #0d1117;">
-                    <!-- Entry Zone Row -->
-                    <div style="display: grid; grid-template-columns: 120px 1fr; gap: 0.5rem; margin-bottom: 0.75rem; align-items: center;">
-                        <div style="color: #666; font-size: 0.75rem; text-transform: uppercase;">Entry Zone</div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="color: #00ff41; font-size: 1.1rem; font-weight: 600;">${entry_low:.2f}</span>
-                            <span style="color: #444;">—</span>
-                            <span style="color: #00ff41; font-size: 1.1rem; font-weight: 600;">${entry_high:.2f}</span>
-                            <span style="color: #444; font-size: 0.7rem; margin-left: 0.5rem;">▼ BUY ZONE</span>
-                        </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Target 1
+            st.markdown(f"""
+            <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.5rem 1rem; font-family: 'Consolas', 'Monaco', monospace;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="color: #00ff41; font-size: 0.75rem;">🎯 TARGET 1</span>
                     </div>
-                    
-                    <!-- Divider -->
-                    <div style="border-top: 1px solid #222; margin: 0.75rem 0;"></div>
-                    
-                    <!-- Stop Loss Row -->
-                    <div style="display: grid; grid-template-columns: 120px 1fr; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
-                        <div style="color: #ff3b30; font-size: 0.75rem; text-transform: uppercase;">⛔ Stop Loss</div>
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <span style="color: #ff3b30; font-size: 1.1rem; font-weight: 700;">${stop_loss:.2f}</span>
-                            <span style="background: rgba(255,59,48,0.2); color: #ff6b6b; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem;">-{stop_pct:.1f}%</span>
-                            <span style="color: #444; font-size: 0.7rem;">RISK: ${risk_per_share:.2f}/share</span>
-                        </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="color: #00ff41; font-size: 1.1rem; font-weight: 700;">${target_1:.2f}</span>
+                        <span style="background: rgba(0,255,65,0.2); color: #4ade80; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">+{target_1_pct:.1f}%</span>
+                        <span style="color: #555; font-size: 0.7rem;">REWARD: ${reward_per_share:.2f}/sh</span>
                     </div>
-                    
-                    <!-- Target 1 Row -->
-                    <div style="display: grid; grid-template-columns: 120px 1fr; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
-                        <div style="color: #00ff41; font-size: 0.75rem; text-transform: uppercase;">🎯 Target 1</div>
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <span style="color: #00ff41; font-size: 1.1rem; font-weight: 700;">${target_1:.2f}</span>
-                            <span style="background: rgba(0,255,65,0.2); color: #4ade80; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem;">+{target_1_pct:.1f}%</span>
-                            <span style="color: #444; font-size: 0.7rem;">REWARD: ${reward_per_share:.2f}/share</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Target 2 (only if exists)
+            if target_2 and target_2_pct:
+                st.markdown(f"""
+                <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.5rem 1rem; font-family: 'Consolas', 'Monaco', monospace;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="color: #00d4ff; font-size: 0.75rem;">🚀 TARGET 2</span>
                         </div>
-                    </div>
-                    
-                    {"" if not target_2 else f'''
-                    <!-- Target 2 Row -->
-                    <div style="display: grid; grid-template-columns: 120px 1fr; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
-                        <div style="color: #00d4ff; font-size: 0.75rem; text-transform: uppercase;">🚀 Target 2</div>
-                        <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
                             <span style="color: #00d4ff; font-size: 1.1rem; font-weight: 700;">${target_2:.2f}</span>
-                            <span style="background: rgba(0,212,255,0.2); color: #67e8f9; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem;">+{target_2_pct:.1f}%</span>
-                            <span style="color: #444; font-size: 0.7rem;">EXTENDED TARGET</span>
-                        </div>
-                    </div>
-                    '''}
-                    
-                    <!-- Divider -->
-                    <div style="border-top: 1px solid #222; margin: 0.75rem 0;"></div>
-                    
-                    <!-- Key Levels Row -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.75rem;">
-                        <div style="background: rgba(255,59,48,0.1); border: 1px solid rgba(255,59,48,0.3); border-radius: 4px; padding: 0.5rem 0.75rem;">
-                            <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Breakdown Level</div>
-                            <div style="color: #ff6b6b; font-size: 1rem; font-weight: 600;">${breakdown:.2f}</div>
-                        </div>
-                        <div style="background: rgba(0,255,65,0.1); border: 1px solid rgba(0,255,65,0.3); border-radius: 4px; padding: 0.5rem 0.75rem;">
-                            <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Breakout Level</div>
-                            <div style="color: #4ade80; font-size: 1rem; font-weight: 600;">${breakout:.2f}</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Bottom Stats Bar -->
-                    <div style="background: #161b22; border-radius: 4px; padding: 0.75rem; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; text-align: center;">
-                        <div>
-                            <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">R:R Ratio</div>
-                            <div style="color: {'#00ff41' if rr_ratio >= 2 else '#ffcc00' if rr_ratio >= 1.5 else '#ff6b6b'}; font-size: 1.1rem; font-weight: 700;">{rr_ratio:.1f}:1</div>
-                        </div>
-                        <div>
-                            <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">Position Size</div>
-                            <div style="color: {'#ffcc00' if position_size == 'REDUCED' else '#00ff41'}; font-size: 0.9rem; font-weight: 600;">{position_size}</div>
-                        </div>
-                        <div>
-                            <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">Volatility</div>
-                            <div style="color: {vol_regime_color}; font-size: 0.9rem; font-weight: 600;">{vol_regime.upper()}</div>
-                        </div>
-                        <div>
-                            <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">Signal</div>
-                            <div style="color: {verdict_color}; font-size: 0.9rem; font-weight: 600;">{verdict_text}</div>
+                            <span style="background: rgba(0,212,255,0.2); color: #67e8f9; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">+{target_2_pct:.1f}%</span>
+                            <span style="color: #555; font-size: 0.7rem;">EXTENDED</span>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Terminal Footer -->
-                <div style="background: #0a0a0a; border-top: 1px solid #222; padding: 0.4rem 1rem; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="color: #444; font-size: 0.65rem;">
-                        <span style="color: #ff9500;">●</span> AI INSTITUTIONAL ANALYSIS
-                    </div>
-                    <div style="color: #444; font-size: 0.65rem;">
-                        Updated: {datetime.now().strftime('%H:%M:%S')} ET
-                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Key Levels - use st.columns
+            kl_col1, kl_col2 = st.columns(2)
+            with kl_col1:
+                st.markdown(f"""
+                <div style="background: rgba(255,59,48,0.1); border: 1px solid rgba(255,59,48,0.3); border-radius: 4px; padding: 0.6rem; text-align: center; font-family: 'Consolas', 'Monaco', monospace;">
+                    <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Breakdown Level</div>
+                    <div style="color: #ff6b6b; font-size: 1.2rem; font-weight: 700;">${breakdown:.2f}</div>
                 </div>
+                """, unsafe_allow_html=True)
+            with kl_col2:
+                st.markdown(f"""
+                <div style="background: rgba(0,255,65,0.1); border: 1px solid rgba(0,255,65,0.3); border-radius: 4px; padding: 0.6rem; text-align: center; font-family: 'Consolas', 'Monaco', monospace;">
+                    <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Breakout Level</div>
+                    <div style="color: #4ade80; font-size: 1.2rem; font-weight: 700;">${breakout:.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Bottom Stats - use st.columns
+            stat_cols = st.columns(4)
+            with stat_cols[0]:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 0.5rem; text-align: center;">
+                    <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">R:R Ratio</div>
+                    <div style="color: {rr_color}; font-size: 1.2rem; font-weight: 700;">{rr_ratio:.1f}:1</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with stat_cols[1]:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 0.5rem; text-align: center;">
+                    <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">Position Size</div>
+                    <div style="color: {pos_size_color}; font-size: 1rem; font-weight: 600;">{position_size}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with stat_cols[2]:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 0.5rem; text-align: center;">
+                    <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">Volatility</div>
+                    <div style="color: {vol_regime_color}; font-size: 1rem; font-weight: 600;">{vol_regime.upper()}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with stat_cols[3]:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 0.5rem; text-align: center;">
+                    <div style="color: #666; font-size: 0.6rem; text-transform: uppercase;">Signal</div>
+                    <div style="color: {verdict_color}; font-size: 1rem; font-weight: 600;">{verdict_text}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Terminal Footer
+            st.markdown(f"""
+            <div style="background: #0a0a0a; border: 1px solid #333; border-radius: 0 0 4px 4px; padding: 0.4rem 1rem; display: flex; justify-content: space-between; font-family: 'Consolas', 'Monaco', monospace;">
+                <span style="color: #444; font-size: 0.65rem;"><span style="color: #ff9500;">●</span> AI INSTITUTIONAL ANALYSIS</span>
+                <span style="color: #444; font-size: 0.65rem;">Updated: {datetime.now().strftime('%H:%M:%S')} ET</span>
             </div>
             """, unsafe_allow_html=True)
             
@@ -4717,28 +4738,36 @@ def render_stock_report(symbol):
                     max_loss = 0
                     potential_gain = 0
                 
-                st.markdown(f"""
-                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
-                        <div>
-                            <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Shares</div>
-                            <div style="color: #58a6ff; font-size: 1.3rem; font-weight: 700;">{shares:,}</div>
-                        </div>
-                        <div>
-                            <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Position Value</div>
-                            <div style="color: #c9d1d9; font-size: 1.3rem; font-weight: 700;">${position_value:,.0f}</div>
-                        </div>
-                        <div>
-                            <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Max Loss</div>
-                            <div style="color: #f85149; font-size: 1.3rem; font-weight: 700;">-${max_loss:,.0f}</div>
-                        </div>
-                        <div>
-                            <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Potential Gain</div>
-                            <div style="color: #3fb950; font-size: 1.3rem; font-weight: 700;">+${potential_gain:,.0f}</div>
-                        </div>
+                # Results using columns
+                res_cols = st.columns(4)
+                with res_cols[0]:
+                    st.markdown(f"""
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75rem; text-align: center;">
+                        <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Shares</div>
+                        <div style="color: #58a6ff; font-size: 1.4rem; font-weight: 700;">{shares:,}</div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                with res_cols[1]:
+                    st.markdown(f"""
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75rem; text-align: center;">
+                        <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Position Value</div>
+                        <div style="color: #c9d1d9; font-size: 1.4rem; font-weight: 700;">${position_value:,.0f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with res_cols[2]:
+                    st.markdown(f"""
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75rem; text-align: center;">
+                        <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Max Loss</div>
+                        <div style="color: #f85149; font-size: 1.4rem; font-weight: 700;">-${max_loss:,.0f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with res_cols[3]:
+                    st.markdown(f"""
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75rem; text-align: center;">
+                        <div style="color: #8b949e; font-size: 0.7rem; text-transform: uppercase;">Potential Gain</div>
+                        <div style="color: #3fb950; font-size: 1.4rem; font-weight: 700;">+${potential_gain:,.0f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
     
     st.markdown("---")
     
