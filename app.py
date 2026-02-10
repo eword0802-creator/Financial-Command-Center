@@ -3076,18 +3076,32 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
     # 10. Trade Recommendation
     trade_text = f"**Trade Parameters:**\n"
     if position_bias in ['aggressive_long', 'long', 'cautious_long']:
+        effective_atr_text = atr_value if atr_value > 0 else price * 0.02
+        atr_mult = 1.5 if 'aggressive' in position_bias else 2.5 if 'cautious' in position_bias else 2.0
+        sl_price = price - (effective_atr_text * atr_mult)
+        sup_ref = nearest_support[1] if nearest_support else price * 0.97
+        sl_final = min(sl_price, sup_ref - effective_atr_text * 0.5)
+        tp1 = nearest_resistance[1] if nearest_resistance and nearest_resistance[1] > price else price + effective_atr_text * 2.5
         trade_text += f"• **Bias:** LONG\n"
-        trade_text += f"• **Entry Zone:** ${nearest_support[1] if nearest_support else price*0.98:.2f} - ${price:.2f}\n"
-        trade_text += f"• **Stop Loss:** ${(nearest_support[1] if nearest_support else price) * 0.97:.2f} (-{support_dist + 3:.1f}% from current)\n"
-        trade_text += f"• **Target 1:** ${upside_target:.2f} (+{upside_pct:.1f}%)\n"
-        if target_high > upside_target:
+        trade_text += f"• **Entry Zone:** ${max(sup_ref, price - effective_atr_text * 0.5):.2f} - ${price:.2f}\n"
+        trade_text += f"• **Stop Loss:** ${sl_final:.2f} ({safe_pct_change(sl_final, price):+.1f}%) — {atr_mult:.1f}x ATR below entry, beneath support\n"
+        trade_text += f"• **Target 1:** ${tp1:.2f} (+{safe_pct_change(tp1, price):.1f}%)\n"
+        if target_high > tp1:
             trade_text += f"• **Target 2:** ${target_high:.2f} (+{safe_pct_change(target_high, price):.1f}%)\n"
-        trade_text += f"• **Position Size:** {'Standard' if volatility_regime == 'normal' else 'Reduced' if volatility_regime in ['high', 'elevated'] else 'Standard'} allocation\n"
+        trade_text += f"• **R:R Ratio:** {safe_div(abs(tp1 - price), abs(price - sl_final), 0):.1f}:1\n"
+        trade_text += f"• **Position Size:** {'Reduced' if volatility_regime in ['high', 'elevated'] else 'Standard'} allocation\n"
     elif position_bias in ['aggressive_short', 'short', 'cautious_short']:
+        effective_atr_text = atr_value if atr_value > 0 else price * 0.02
+        atr_mult = 1.5 if 'aggressive' in position_bias else 2.5 if 'cautious' in position_bias else 2.0
+        sl_price = price + (effective_atr_text * atr_mult)
+        res_ref = nearest_resistance[1] if nearest_resistance else price * 1.03
+        sl_final = max(sl_price, res_ref + effective_atr_text * 0.5)
+        tp1 = nearest_support[1] if nearest_support and nearest_support[1] < price else price - effective_atr_text * 2.5
         trade_text += f"• **Bias:** SHORT / DEFENSIVE\n"
-        trade_text += f"• **Resistance:** ${nearest_resistance[1] if nearest_resistance else price*1.02:.2f}\n"
-        trade_text += f"• **Stop (for shorts):** ${(nearest_resistance[1] if nearest_resistance else price) * 1.03:.2f}\n"
-        trade_text += f"• **Downside Target:** ${downside_target:.2f} ({downside_pct:.1f}%)\n"
+        trade_text += f"• **Entry Zone:** ${price:.2f} - ${min(res_ref, price + effective_atr_text * 0.5):.2f}\n"
+        trade_text += f"• **Stop Loss:** ${sl_final:.2f} ({safe_pct_change(sl_final, price):+.1f}%) — {atr_mult:.1f}x ATR above entry, above resistance\n"
+        trade_text += f"• **Downside Target:** ${tp1:.2f} ({safe_pct_change(tp1, price):+.1f}%)\n"
+        trade_text += f"• **R:R Ratio:** {safe_div(abs(price - tp1), abs(sl_final - price), 0):.1f}:1\n"
         trade_text += f"• **Hedge Recommendation:** Consider protective puts or reduced exposure\n"
     else:
         trade_text += f"• **Bias:** NEUTRAL - Wait for confirmation\n"
@@ -3119,24 +3133,176 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
 """.strip()
     
     # Build structured trade parameters for Bloomberg-style UI
+    # ========================================================================
+    # INSTITUTIONAL-GRADE TRADE PARAMETER ENGINE
+    # Uses ATR-based risk management, proper entry zones per direction,
+    # and correct target/stop alignment for long, short, and neutral setups.
+    # ========================================================================
+    
+    is_long = position_bias in ['aggressive_long', 'long', 'cautious_long']
+    is_short = position_bias in ['aggressive_short', 'short', 'cautious_short']
+    is_neutral = position_bias == 'neutral'
+    
+    # ATR multipliers scale with conviction level
+    if 'aggressive' in position_bias:
+        atr_stop_mult = 1.5   # Tighter stop = more conviction
+        atr_tp1_mult = 3.0    # Wider target
+        atr_tp2_mult = 5.0
+    elif 'cautious' in position_bias:
+        atr_stop_mult = 2.5   # Wider stop = less conviction
+        atr_tp1_mult = 2.0
+        atr_tp2_mult = 3.5
+    else:
+        atr_stop_mult = 2.0   # Standard
+        atr_tp1_mult = 2.5
+        atr_tp2_mult = 4.0
+    
+    # Ensure atr_value is valid (fallback to 2% of price)
+    effective_atr = atr_value if atr_value > 0 else price * 0.02
+    
+    # === SUPPORT/RESISTANCE PRICE ANCHORS ===
+    sup_price = nearest_support[1] if nearest_support else price * 0.97
+    res_price = nearest_resistance[1] if nearest_resistance else price * 1.03
+    
+    if is_long:
+        # LONG SETUP
+        # Entry: Pull back toward support or current level; tight zone
+        # Use the higher of: slight pullback from current, or just above nearest support
+        entry_ideal = max(sup_price, price - effective_atr * 0.5)  # Ideal entry near support or half-ATR dip
+        entry_low = round(min(entry_ideal, price * 0.995), 2)  # Floor: ~0.5% below current
+        entry_high = round(price, 2)                            # Ceiling: current price
+        
+        # Stop Loss: Below nearest support, confirmed by ATR
+        atr_stop = price - (effective_atr * atr_stop_mult)
+        structure_stop = sup_price - (effective_atr * 0.5)  # Just below support with ATR buffer
+        stop_loss = round(min(atr_stop, structure_stop), 2)  # Use the more conservative (lower) stop
+        # Ensure stop is meaningfully below entry
+        if stop_loss >= entry_low:
+            stop_loss = round(entry_low - effective_atr, 2)
+        
+        stop_pct = abs(safe_pct_change(stop_loss, price))
+        
+        # Targets: Use resistance levels confirmed by ATR projections
+        atr_target_1 = price + (effective_atr * atr_tp1_mult)
+        target_1 = round(min(res_price, atr_target_1) if res_price > price else atr_target_1, 2)
+        # Ensure target is above entry
+        if target_1 <= price:
+            target_1 = round(price + effective_atr * atr_tp1_mult, 2)
+        target_1_pct = safe_pct_change(target_1, price)
+        
+        # Target 2: Extended target (analyst high or ATR extension)
+        atr_target_2 = price + (effective_atr * atr_tp2_mult)
+        if target_high > target_1:
+            target_2 = round((target_high + atr_target_2) / 2, 2)  # Blend analyst + ATR
+        elif atr_target_2 > target_1 * 1.02:
+            target_2 = round(atr_target_2, 2)
+        else:
+            target_2 = None
+        target_2_pct = safe_pct_change(target_2, price) if target_2 else None
+        
+        risk_per_share = round(abs(price - stop_loss), 2)
+        reward_per_share = round(abs(target_1 - price), 2)
+        setup_label = "▼ BUY ZONE"
+        
+    elif is_short:
+        # SHORT SETUP
+        # Entry: Rally toward resistance or current level; tight zone
+        entry_ideal = min(res_price, price + effective_atr * 0.5)
+        entry_low = round(price, 2)                              # Floor: current price
+        entry_high = round(max(entry_ideal, price * 1.005), 2)   # Ceiling: ~0.5% above or near resistance
+        
+        # Stop Loss: Above nearest resistance, confirmed by ATR
+        atr_stop = price + (effective_atr * atr_stop_mult)
+        structure_stop = res_price + (effective_atr * 0.5)  # Just above resistance with ATR buffer
+        stop_loss = round(max(atr_stop, structure_stop), 2)  # Use the more conservative (higher) stop
+        # Ensure stop is meaningfully above entry
+        if stop_loss <= entry_high:
+            stop_loss = round(entry_high + effective_atr, 2)
+        
+        stop_pct = abs(safe_pct_change(stop_loss, price))
+        
+        # Targets: Downside - use support levels confirmed by ATR projections
+        atr_target_1 = price - (effective_atr * atr_tp1_mult)
+        target_1 = round(max(sup_price, atr_target_1) if sup_price < price else atr_target_1, 2)
+        # Ensure target is below entry
+        if target_1 >= price:
+            target_1 = round(price - effective_atr * atr_tp1_mult, 2)
+        target_1_pct = safe_pct_change(target_1, price)  # Will be negative
+        
+        # Target 2: Extended downside
+        atr_target_2 = price - (effective_atr * atr_tp2_mult)
+        if target_low > 0 and target_low < target_1:
+            target_2 = round((target_low + atr_target_2) / 2, 2)
+        elif atr_target_2 < target_1 * 0.98 and atr_target_2 > 0:
+            target_2 = round(atr_target_2, 2)
+        else:
+            target_2 = None
+        target_2_pct = safe_pct_change(target_2, price) if target_2 else None
+        
+        risk_per_share = round(abs(stop_loss - price), 2)
+        reward_per_share = round(abs(price - target_1), 2)
+        setup_label = "▲ SHORT ZONE"
+        
+    else:
+        # NEUTRAL SETUP - Range-bound parameters
+        entry_low = round(sup_price, 2)
+        entry_high = round(res_price, 2)
+        
+        # ATR-based stop for breakout/breakdown
+        stop_loss = round(sup_price - effective_atr, 2)  # Below support for breakdown protection
+        stop_pct = abs(safe_pct_change(stop_loss, price))
+        
+        # Targets for range trade
+        target_1 = round(res_price, 2)
+        target_1_pct = safe_pct_change(target_1, price)
+        target_2 = None
+        target_2_pct = None
+        
+        risk_per_share = round(abs(price - stop_loss), 2)
+        reward_per_share = round(abs(target_1 - price), 2)
+        setup_label = "◆ RANGE ZONE"
+    
+    # Position sizing based on volatility regime AND risk
+    if volatility_regime in ['high', 'elevated']:
+        position_size_label = 'REDUCED'
+    elif volatility_regime == 'compressed' and 'aggressive' in position_bias:
+        position_size_label = 'AGGRESSIVE'
+    else:
+        position_size_label = 'STANDARD'
+    
+    # True R:R ratio from actual per-share values
+    true_rr = safe_div(reward_per_share, risk_per_share, 0) if risk_per_share > 0 else 0
+    
+    # Invalidation level: price where the thesis is broken
+    if is_long:
+        invalidation = stop_loss  # Below stop = thesis dead
+    elif is_short:
+        invalidation = stop_loss  # Above stop = thesis dead
+    else:
+        invalidation = round(sup_price - effective_atr * 1.5, 2)  # Below range
+    
     trade_params_structured = {
-        'bias': 'LONG' if position_bias in ['aggressive_long', 'long', 'cautious_long'] else 'SHORT' if position_bias in ['aggressive_short', 'short', 'cautious_short'] else 'NEUTRAL',
+        'bias': 'LONG' if is_long else 'SHORT' if is_short else 'NEUTRAL',
         'bias_strength': 'AGGRESSIVE' if 'aggressive' in position_bias else 'CAUTIOUS' if 'cautious' in position_bias else 'STANDARD',
-        'entry_low': nearest_support[1] if nearest_support else price * 0.98,
-        'entry_high': price,
-        'stop_loss': (nearest_support[1] if nearest_support else price) * 0.97 if position_bias in ['aggressive_long', 'long', 'cautious_long'] else (nearest_resistance[1] if nearest_resistance else price) * 1.03,
-        'stop_pct': support_dist + 3 if position_bias in ['aggressive_long', 'long', 'cautious_long'] else resist_dist + 3,
-        'target_1': upside_target,
-        'target_1_pct': upside_pct,
-        'target_2': target_high if target_high > upside_target else None,
-        'target_2_pct': safe_pct_change(target_high, price) if target_high > upside_target else None,
-        'position_size': 'REDUCED' if volatility_regime in ['high', 'elevated'] else 'STANDARD',
-        'breakout_level': nearest_resistance[1] if nearest_resistance else price * 1.02,
-        'breakdown_level': nearest_support[1] if nearest_support else price * 0.98,
+        'entry_low': entry_low,
+        'entry_high': entry_high,
+        'stop_loss': stop_loss,
+        'stop_pct': stop_pct,
+        'target_1': target_1,
+        'target_1_pct': target_1_pct,
+        'target_2': target_2,
+        'target_2_pct': target_2_pct,
+        'position_size': position_size_label,
+        'breakout_level': round(res_price, 2),
+        'breakdown_level': round(sup_price, 2),
         'current_price': price,
-        'atr_stop': price - (atr_value * 2) if position_bias in ['aggressive_long', 'long', 'cautious_long'] else price + (atr_value * 2),
-        'risk_per_share': abs(price - ((nearest_support[1] if nearest_support else price) * 0.97)),
-        'reward_per_share': abs(upside_target - price),
+        'atr_value': round(effective_atr, 2),
+        'atr_stop_mult': atr_stop_mult,
+        'risk_per_share': risk_per_share,
+        'reward_per_share': reward_per_share,
+        'rr_ratio': round(true_rr, 2),
+        'invalidation': invalidation,
+        'setup_label': setup_label,
     }
     
     return {
@@ -4977,13 +5143,32 @@ def render_stock_report(symbol):
             breakdown = trade_struct.get('breakdown_level', 0)
             risk_per_share = trade_struct.get('risk_per_share', 0)
             reward_per_share = trade_struct.get('reward_per_share', 0)
-            rr_ratio = expert.get('risk_reward', 0)
+            rr_ratio = trade_struct.get('rr_ratio', 0)
+            atr_val_display = trade_struct.get('atr_value', 0)
+            atr_mult_display = trade_struct.get('atr_stop_mult', 2.0)
+            invalidation = trade_struct.get('invalidation', 0)
+            setup_label = trade_struct.get('setup_label', '◆ ZONE')
             
-            # Pre-compute colors
-            bias_color = '#00ff41' if bias == 'LONG' else '#ff3b30' if bias == 'SHORT' else '#ffcc00'
-            bias_bg = 'rgba(0,255,65,0.15)' if bias == 'LONG' else 'rgba(255,59,48,0.15)' if bias == 'SHORT' else 'rgba(255,204,0,0.15)'
+            # Direction-aware colors
+            is_long = bias == 'LONG'
+            is_short = bias == 'SHORT'
+            
+            bias_color = '#00ff41' if is_long else '#ff3b30' if is_short else '#ffcc00'
+            bias_bg = 'rgba(0,255,65,0.15)' if is_long else 'rgba(255,59,48,0.15)' if is_short else 'rgba(255,204,0,0.15)'
+            entry_color = '#00ff41' if is_long else '#ff6b6b' if is_short else '#58a6ff'
+            target_color = '#00ff41' if is_long else '#ff6b6b' if is_short else '#58a6ff'
+            stop_color = '#ff3b30' if is_long else '#00ff41' if is_short else '#ff3b30'
             rr_color = '#00ff41' if rr_ratio >= 2 else '#ffcc00' if rr_ratio >= 1.5 else '#ff6b6b'
-            pos_size_color = '#ffcc00' if position_size == 'REDUCED' else '#00ff41'
+            pos_size_color = '#ffcc00' if position_size == 'REDUCED' else '#00d4ff' if position_size == 'AGGRESSIVE' else '#00ff41'
+            
+            # Direction labels for stop/target
+            stop_label = "⛔ STOP LOSS" if is_long else "⛔ STOP LOSS (COVER)" if is_short else "⛔ STOP LOSS"
+            target_label = "🎯 TARGET 1" if is_long else "🎯 TARGET 1 (COVER)" if is_short else "🎯 RANGE TARGET"
+            target_2_label = "🚀 TARGET 2" if is_long else "💎 TARGET 2 (EXTENDED)" if is_short else "🚀 EXTENDED"
+            
+            # Stop direction indicator
+            stop_direction = "▼" if is_long else "▲" if is_short else "▼"
+            target_direction = "▲" if is_long else "▼" if is_short else "▲"
             
             # Terminal Header
             st.markdown(f"""
@@ -4994,7 +5179,11 @@ def render_stock_report(symbol):
                     <span style="color: {bias_color}; font-weight: 700; font-size: 1.1rem;">{bias}</span>
                     <span style="background: {bias_bg}; color: {bias_color}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600;">{bias_strength}</span>
                 </div>
-                <div style="color: #666; font-size: 0.75rem;">{symbol} • ${current_price:.2f}</div>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="color: #888; font-size: 0.7rem;">ATR: ${atr_val_display:.2f}</span>
+                    <span style="color: #666;">|</span>
+                    <span style="color: #666; font-size: 0.75rem;">{symbol} • ${current_price:.2f}</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -5003,10 +5192,10 @@ def render_stock_report(symbol):
             <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.75rem 1rem; font-family: 'Consolas', 'Monaco', monospace;">
                 <div style="color: #666; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Entry Zone</div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="color: #00ff41; font-size: 1.2rem; font-weight: 600;">${entry_low:.2f}</span>
+                    <span style="color: {entry_color}; font-size: 1.2rem; font-weight: 600;">${entry_low:.2f}</span>
                     <span style="color: #444;">—</span>
-                    <span style="color: #00ff41; font-size: 1.2rem; font-weight: 600;">${entry_high:.2f}</span>
-                    <span style="color: #444; font-size: 0.7rem; margin-left: 0.5rem;">▼ BUY ZONE</span>
+                    <span style="color: {entry_color}; font-size: 1.2rem; font-weight: 600;">${entry_high:.2f}</span>
+                    <span style="color: #444; font-size: 0.7rem; margin-left: 0.5rem;">{setup_label}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -5016,27 +5205,28 @@ def render_stock_report(symbol):
             <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.5rem 1rem; font-family: 'Consolas', 'Monaco', monospace; border-top: 1px solid #222;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <span style="color: #ff3b30; font-size: 0.75rem;">⛔ STOP LOSS</span>
+                        <span style="color: {stop_color}; font-size: 0.75rem;">{stop_label}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <span style="color: #ff3b30; font-size: 1.1rem; font-weight: 700;">${stop_loss:.2f}</span>
-                        <span style="background: rgba(255,59,48,0.2); color: #ff6b6b; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">-{stop_pct:.1f}%</span>
-                        <span style="color: #555; font-size: 0.7rem;">RISK: ${risk_per_share:.2f}/sh</span>
+                        <span style="color: {stop_color}; font-size: 1.1rem; font-weight: 700;">${stop_loss:.2f}</span>
+                        <span style="background: rgba(255,59,48,0.2); color: #ff6b6b; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">{stop_direction} {stop_pct:.1f}%</span>
+                        <span style="color: #555; font-size: 0.7rem;">RISK: ${risk_per_share:.2f}/sh ({atr_mult_display:.1f}x ATR)</span>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
             # Target 1
+            t1_pct_display = f"+{abs(target_1_pct):.1f}" if is_long else f"-{abs(target_1_pct):.1f}" if is_short else f"+{abs(target_1_pct):.1f}"
             st.markdown(f"""
             <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.5rem 1rem; font-family: 'Consolas', 'Monaco', monospace;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <span style="color: #00ff41; font-size: 0.75rem;">🎯 TARGET 1</span>
+                        <span style="color: {target_color}; font-size: 0.75rem;">{target_label}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <span style="color: #00ff41; font-size: 1.1rem; font-weight: 700;">${target_1:.2f}</span>
-                        <span style="background: rgba(0,255,65,0.2); color: #4ade80; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">+{target_1_pct:.1f}%</span>
+                        <span style="color: {target_color}; font-size: 1.1rem; font-weight: 700;">${target_1:.2f}</span>
+                        <span style="background: rgba(0,255,65,0.2); color: #4ade80; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">{target_direction} {t1_pct_display}%</span>
                         <span style="color: #555; font-size: 0.7rem;">REWARD: ${reward_per_share:.2f}/sh</span>
                     </div>
                 </div>
@@ -5045,39 +5235,50 @@ def render_stock_report(symbol):
             
             # Target 2 (only if exists)
             if target_2 and target_2_pct:
+                t2_pct_display = f"+{abs(target_2_pct):.1f}" if is_long else f"-{abs(target_2_pct):.1f}" if is_short else f"+{abs(target_2_pct):.1f}"
                 st.markdown(f"""
                 <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.5rem 1rem; font-family: 'Consolas', 'Monaco', monospace;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <span style="color: #00d4ff; font-size: 0.75rem;">🚀 TARGET 2</span>
+                            <span style="color: #00d4ff; font-size: 0.75rem;">{target_2_label}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.75rem;">
                             <span style="color: #00d4ff; font-size: 1.1rem; font-weight: 700;">${target_2:.2f}</span>
-                            <span style="background: rgba(0,212,255,0.2); color: #67e8f9; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">+{target_2_pct:.1f}%</span>
+                            <span style="background: rgba(0,212,255,0.2); color: #67e8f9; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem;">{target_direction} {t2_pct_display}%</span>
                             <span style="color: #555; font-size: 0.7rem;">EXTENDED</span>
                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Key Levels - use st.columns
+            # Invalidation Level
+            st.markdown(f"""
+            <div style="background: #0d1117; border-left: 1px solid #333; border-right: 1px solid #333; padding: 0.4rem 1rem; font-family: 'Consolas', 'Monaco', monospace; border-top: 1px solid #1a1a1a;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #555; font-size: 0.7rem;">⚠️ INVALIDATION</span>
+                    <span style="color: #888; font-size: 0.85rem;">${invalidation:.2f} <span style="color: #555; font-size: 0.65rem;">— thesis void beyond this level</span></span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Key Levels
             kl_col1, kl_col2 = st.columns(2)
             with kl_col1:
                 st.markdown(f"""
                 <div style="background: rgba(255,59,48,0.1); border: 1px solid rgba(255,59,48,0.3); border-radius: 4px; padding: 0.6rem; text-align: center; font-family: 'Consolas', 'Monaco', monospace;">
-                    <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Breakdown Level</div>
+                    <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Support / Breakdown</div>
                     <div style="color: #ff6b6b; font-size: 1.2rem; font-weight: 700;">${breakdown:.2f}</div>
                 </div>
                 """, unsafe_allow_html=True)
             with kl_col2:
                 st.markdown(f"""
                 <div style="background: rgba(0,255,65,0.1); border: 1px solid rgba(0,255,65,0.3); border-radius: 4px; padding: 0.6rem; text-align: center; font-family: 'Consolas', 'Monaco', monospace;">
-                    <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Breakout Level</div>
+                    <div style="color: #666; font-size: 0.65rem; text-transform: uppercase;">Resistance / Breakout</div>
                     <div style="color: #4ade80; font-size: 1.2rem; font-weight: 700;">${breakout:.2f}</div>
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Bottom Stats - use st.columns
+            # Bottom Stats
             stat_cols = st.columns(4)
             with stat_cols[0]:
                 st.markdown(f"""
