@@ -2650,23 +2650,23 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
     
     # 1. Executive Summary
     if overall_score >= 25:
-        exec_summary = f"{name} presents a compelling opportunity with strong technical momentum and favorable risk/reward dynamics."
+        exec_summary = f"{name} is showing strong technical momentum with favorable risk/reward setup. Multiple factors are aligned — trend structure, volume confirmation, and momentum scoring all support a constructive outlook. The setup warrants maintaining or adding exposure with defined risk parameters."
     elif overall_score <= -25:
-        exec_summary = f"{name} faces significant headwinds with deteriorating technicals and elevated downside risk."
+        exec_summary = f"{name} faces deteriorating technicals and elevated downside risk. Momentum is negative, breadth of supporting signals is thin, and the risk/reward on new longs has shifted unfavorably. Capital preservation and position reduction are the priority until conditions improve."
     else:
-        exec_summary = f"{name} is in a transitional phase with mixed signals requiring patience for clearer direction."
+        exec_summary = f"{name} is in a transitional phase with genuinely mixed signals across timeframes. Neither bulls nor bears have conviction at current levels, which typically resolves with a catalyst-driven breakout or breakdown. Reduced sizing and patience is the appropriate posture."
     
     # 2. Trend Analysis
     trend_text = f"**Trend Structure:** "
     if trend_3mo in ['strong_uptrend', 'uptrend']:
-        trend_text += f"Primary trend is bullish with price {abs(trend_3mo_pct):.1f}% above the 20-day MA on the 3-month timeframe. "
+        trend_text += f"Primary trend is bullish with price {abs(trend_3mo_pct):.1f}% above the 20-day MA on the 3-month timeframe — this is a healthy trend that deserves respect. "
     elif trend_3mo in ['strong_downtrend', 'downtrend']:
-        trend_text += f"Primary trend is bearish with price {abs(trend_3mo_pct):.1f}% below the 20-day MA. "
+        trend_text += f"Primary trend is bearish with price {abs(trend_3mo_pct):.1f}% below the 20-day MA — selling into rallies has been the winning strategy until this structure changes. "
     else:
-        trend_text += f"Price action is consolidating within a range. "
+        trend_text += f"Price action is consolidating within a range, building energy for the next directional move. "
     
     if trend_5d != trend_3mo:
-        trend_text += f"Near-term momentum ({trend_5d.replace('_', ' ')}) diverges from the primary trend, suggesting potential inflection. "
+        trend_text += f"Near-term momentum ({trend_5d.replace('_', ' ')}) diverges from the primary trend — these inflection points can mark either reversals or traps, so confirmation via volume and follow-through is essential. "
     
     # 3. Momentum Assessment
     momentum_text = f"**Momentum Score: {tech_score:+d}/100** — "
@@ -2675,44 +2675,51 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
     momentum_text += f"Key drivers: {', '.join(factor_strs)}. "
     
     if rsi > 65:
-        momentum_text += f"RSI at {rsi:.0f} indicates overextension; mean reversion risk elevated. "
+        momentum_text += f"RSI at {rsi:.0f} is in overbought territory — historically these readings precede 3-5% mean-reversion pullbacks within 5-10 sessions. Chasing here has a poor hit rate. "
     elif rsi < 35:
-        momentum_text += f"RSI at {rsi:.0f} suggests oversold conditions; watch for reversal signals. "
+        momentum_text += f"RSI at {rsi:.0f} is deeply oversold — these readings have historically marked tactical bottoming zones, though catching falling knives requires defined risk and patience. "
     
     # 4. Volume Analysis
     volume_text = f"**Volume Profile:** "
     if vol_ratio > 2:
-        volume_text += f"Institutional participation evident with volume at {vol_ratio:.1f}x the 20-day average. "
+        volume_text += f"Volume at {vol_ratio:.1f}x the 20-day average signals institutional-level participation — smart money doesn't trade in small size. "
         if change_pct > 0:
-            volume_text += "Heavy accumulation validates bullish price action. "
+            volume_text += "The volume-price alignment (heavy accumulation on the upside) validates the bullish price action and increases probability of follow-through. "
         else:
-            volume_text += "Distribution pattern suggests institutional selling. "
+            volume_text += "Distribution on elevated volume is a warning signal — when institutions are selling at this pace, the move often has further to run on the downside. "
     elif vol_ratio < 0.7:
-        volume_text += f"Below-average volume ({vol_ratio:.1f}x) indicates low conviction; breakouts/breakdowns likely to fail. "
+        volume_text += f"Volume at just {vol_ratio:.1f}x average reflects low conviction — any move on thin volume should be treated with skepticism. Breakouts and breakdowns on anemic volume have a high failure rate. "
     else:
-        volume_text += f"Volume at {vol_ratio:.1f}x average reflects normal institutional participation. "
+        volume_text += f"Volume at {vol_ratio:.1f}x average is in the normal band — no strong signal from the flow data in either direction. "
     
     # 5. Volatility Assessment
     vol_text = f"**Volatility Regime: {volatility_regime.upper()}** — "
     if volatility_regime == 'high':
-        vol_text += f"ATR at {atr_pct:.1f}% of price and {hist_volatility:.0f}% annualized vol demand reduced position sizing and wider stops. "
+        vol_text += f"ATR at {atr_pct:.1f}% of price and {hist_volatility:.0f}% annualized vol demand reduced position sizing and wider stops — the market is pricing in uncertainty, and your risk management needs to reflect that. "
     elif volatility_regime == 'compressed':
-        vol_text += f"Compressed volatility ({atr_pct:.1f}% ATR) typically precedes explosive moves. Prepare for breakout/breakdown. "
+        vol_text += f"Compressed volatility ({atr_pct:.1f}% ATR) is a coiled-spring setup — these regimes typically resolve with an explosive directional move. The trade is preparing for expansion, not predicting direction. "
     else:
-        vol_text += f"ATR at {atr_pct:.1f}% of price supports standard position sizing. "
+        vol_text += f"ATR at {atr_pct:.1f}% of price supports standard position sizing and normal stop-loss parameters. "
     
     # 6. Risk Metrics
     risk_text = f"**Risk Assessment:** "
-    risk_text += f"Trading {pct_from_high:.1f}% below 52-week high, {pct_from_low:.1f}% above 52-week low. "
+    risk_text += f"Trading {pct_from_high:.1f}% below 52-week high, {pct_from_low:.1f}% above 52-week low — "
+    if abs(pct_from_high) < 5:
+        risk_text += "proximity to highs means breakout continuation or rejection are both high-probability outcomes. "
+    elif abs(pct_from_high) > 20:
+        risk_text += "the distance from highs reflects meaningful damage to the trend structure that will take time to repair. "
+    else:
+        risk_text += "mid-range positioning leaves room for movement in either direction. "
+    
     if max_drawdown < -15:
-        risk_text += f"Recent max drawdown of {max_drawdown:.1f}% indicates elevated volatility risk. "
+        risk_text += f"Recent max drawdown of {max_drawdown:.1f}% is a red flag for volatility risk — positions sized for normal conditions can experience outsized P&L swings. "
     
     if risk_reward > 2:
-        risk_text += f"**Risk/Reward: {risk_reward:.1f}:1** — Favorable asymmetry with {resist_dist:.1f}% upside to resistance vs {support_dist:.1f}% downside to support. "
+        risk_text += f"**Risk/Reward: {risk_reward:.1f}:1** — Compelling asymmetry with {resist_dist:.1f}% upside to resistance vs {support_dist:.1f}% downside to support. This is the kind of setup where the math works in your favor. "
     elif risk_reward > 1:
-        risk_text += f"**Risk/Reward: {risk_reward:.1f}:1** — Acceptable setup with defined levels. "
+        risk_text += f"**Risk/Reward: {risk_reward:.1f}:1** — Acceptable setup with defined levels, though not the most compelling asymmetry. "
     elif risk_reward > 0 and risk_reward < 0.5:
-        risk_text += f"**Risk/Reward: {risk_reward:.1f}:1** — Unfavorable risk/reward; consider waiting for better entry. "
+        risk_text += f"**Risk/Reward: {risk_reward:.1f}:1** — Unfavorable risk/reward at current levels. The downside to support exceeds the upside to resistance, which means patience for a better entry is warranted. "
     
     # 7. Institutional Flow
     inst_text = ""
@@ -2720,11 +2727,11 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
         inst_text = f"**Smart Money Indicators:** "
         inst_text += f"Composite score at {smart_money_score}/100 signals {inst_bias} institutional bias. "
         if squeeze_potential > 50:
-            inst_text += f"**Squeeze Alert:** {squeeze_potential}% squeeze potential with elevated short interest. "
+            inst_text += f"**Squeeze Alert:** {squeeze_potential}% squeeze potential with elevated short interest — if the stock starts moving against shorts, the forced covering can accelerate the move significantly. "
         if dark_pool_sentiment == 'accumulation':
-            inst_text += "Dark pool flow suggests quiet accumulation by large players. "
+            inst_text += "Dark pool flow pattern suggests quiet accumulation by large players — when institutions route this much flow off-exchange, they're building a position without signaling intent. "
         elif dark_pool_sentiment == 'distribution':
-            inst_text += "Dark pool patterns indicate institutional distribution. "
+            inst_text += "Dark pool patterns indicate institutional distribution — the smart money is unwinding exposure in a controlled manner. "
     
     # 8. Fundamental Context (for stocks)
     fund_text = ""
@@ -2735,14 +2742,14 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
             if forward_pe > 0:
                 fund_text += f"(fwd {forward_pe:.1f}x) "
         if peg > 0 and peg < 2:
-            fund_text += f"with PEG of {peg:.1f} suggests reasonable growth-adjusted valuation. "
+            fund_text += f"with PEG of {peg:.1f} — the growth-adjusted valuation looks reasonable, meaning the market isn't pricing in perfection. "
         elif peg > 3:
-            fund_text += f"with PEG of {peg:.1f} implies premium valuation relative to growth. "
+            fund_text += f"with PEG of {peg:.1f} — the market is paying a steep premium relative to growth, leaving little margin for error on execution. "
         
         if rev_growth and rev_growth > 0.2:
-            fund_text += f"Revenue growth of {rev_growth*100:.0f}% supports premium multiple. "
+            fund_text += f"Revenue growth of {rev_growth*100:.0f}% provides fundamental support for the premium multiple — as long as the growth engine is running, the valuation can be sustained. "
         elif earnings_growth and earnings_growth < -0.1:
-            fund_text += f"Earnings contraction of {abs(earnings_growth)*100:.0f}% warrants caution. "
+            fund_text += f"Earnings contraction of {abs(earnings_growth)*100:.0f}% is a fundamental headwind that limits the bull case until the trajectory inflects. "
     
     # 9. Catalyst Watch
     catalyst_text = ""
@@ -2750,9 +2757,9 @@ def generate_expert_analysis(symbol, data, signals, support_levels, resistance_l
         catalyst_text = f"**Catalyst Watch:** News sentiment reading {news_sentiment.get('overall', 'neutral')} "
         catalyst_text += f"with {news_sentiment.get('bullish', 0)} bullish / {news_sentiment.get('bearish', 0)} bearish signals. "
         if news_sentiment.get('overall') == 'bullish':
-            catalyst_text += "Positive news flow provides fundamental tailwind. "
+            catalyst_text += "The positive headline flow provides a supportive narrative, though the key risk is whether the good news is already in the price — if the stock can't rally on bullish catalysts, that's a red flag. "
         elif news_sentiment.get('overall') == 'bearish':
-            catalyst_text += "Negative headlines create overhang; monitor for stabilization. "
+            catalyst_text += "Negative headlines create an overhang on sentiment. The constructive signal would be price stabilization despite the bad news — that marks exhaustion of selling pressure. "
     
     # 10. Trade Recommendation
     trade_text = f"**Trade Parameters:**\n"
@@ -2977,201 +2984,290 @@ def generate_assessment(market_data, news_sentiment, econ_ind):
 
 def generate_expert_macro_summary(market_data, news_sentiment, econ_ind, assessment):
     """
-    Generate market analysis that sounds like an actual hedge fund PM.
-    Direct, opinionated, focused on what matters. No corporate speak.
+    Institutional macro brief — written in the voice of a senior strategist
+    at a top multi-strat fund. Dense with signal, no filler, no AI clichés.
+    Covers: index positioning, vol regime, rates/FX/commodities cross-asset,
+    sector internals, global context, and forward catalysts.
+    Returns tuple: (market_summary, news_analysis)
     """
     eastern = pytz.timezone('US/Eastern')
     now = datetime.now(eastern)
     market_hour = now.hour
-    
-    # Get session context
+
     if market_hour < 9 or (market_hour == 9 and now.minute < 30):
         session = "pre-market"
     elif market_hour < 16:
-        session = "the session"
+        session = "intraday"
     else:
-        session = "after hours"
-    
-    # Pull all the data
+        session = "after-hours"
+
+    # ── Extract market data ──
     es = market_data.get('futures', {}).get('S&P 500', {})
     nq = market_data.get('futures', {}).get('Nasdaq 100', {})
     dj = market_data.get('futures', {}).get('Dow Jones', {})
     vix = market_data.get('futures', {}).get('VIX', {})
     gold = market_data.get('futures', {}).get('Gold', {})
     oil = market_data.get('futures', {}).get('Crude Oil', {})
-    
+    tnx = market_data.get('futures', {}).get('10Y Treasury', {})
+
+    es_price = es.get('current_price', 0)
     es_ch = es.get('overnight_change_pct', 0)
     nq_ch = nq.get('overnight_change_pct', 0)
     dj_ch = dj.get('overnight_change_pct', 0)
     vix_level = vix.get('current_price', 20)
     vix_ch = vix.get('overnight_change_pct', 0)
+    gold_price = gold.get('current_price', 0)
     gold_ch = gold.get('overnight_change_pct', 0)
+    oil_price = oil.get('current_price', 0)
     oil_ch = oil.get('overnight_change_pct', 0)
-    
-    # Sectors
+    tnx_level = tnx.get('current_price', 0) if tnx else 0
+    tnx_ch = tnx.get('overnight_change_pct', 0) if tnx else 0
+
+    # Economic data
+    treasury_10y = econ_ind.get('10Y Treasury', {}).get('value', 0)
+    dollar_idx = econ_ind.get('Dollar Index', {}).get('value', 0)
+    if tnx_level == 0 and treasury_10y > 0:
+        tnx_level = treasury_10y
+
+    # Global context
+    global_data = market_data.get('global', {})
+    global_performance = [(n, m.get('overnight_change_pct', 0)) for n, m in global_data.items()]
+    global_up = sum(1 for _, ch in global_performance if ch > 0)
+    global_down = len(global_performance) - global_up
+    avg_global_ch = sum(ch for _, ch in global_performance) / max(len(global_performance), 1)
+
+    # Sector internals
     sectors = [(n, d.get('metrics', {}).get('overnight_change_pct', 0)) for n, d in market_data.get('sectors', {}).items()]
     sectors.sort(key=lambda x: x[1], reverse=True)
-    top_sector = sectors[0] if sectors else ('Tech', 0)
-    bottom_sector = sectors[-1] if sectors else ('Energy', 0)
+    top_sectors = sectors[:3] if sectors else []
+    bottom_sectors = sectors[-3:] if sectors else []
     sectors_up = sum(1 for _, ch in sectors if ch > 0)
-    
-    # Global
-    global_data = market_data.get('global', {})
-    global_up = sum(1 for _, m in global_data.items() if m.get('overnight_change_pct', 0) > 0)
-    global_total = len(global_data)
-    
-    # News
-    news_overall = news_sentiment.get('overall', 'neutral')
-    
-    # === BUILD THE ANALYSIS - SOUND LIKE A REAL PM ===
-    parts = []
-    
-    # Opening - be direct about what's happening
-    if abs(es_ch) >= 2:
-        if es_ch > 0:
-            parts.append(f"Big move today. Spoos up {es_ch:.1f}%, Nasdaq ripping {nq_ch:.1f}%.")
-        else:
-            parts.append(f"Ugly tape. S&P down {abs(es_ch):.1f}%, Nasdaq getting hit harder at {nq_ch:.1f}%.")
-    elif abs(es_ch) >= 1:
-        if es_ch > 0:
-            parts.append(f"Decent bid in {session}. S&P +{es_ch:.2f}%, Nasdaq +{nq_ch:.2f}%.")
-        else:
-            parts.append(f"Sellers in control. S&P {es_ch:.2f}%, Nasdaq {nq_ch:.2f}%.")
-    elif abs(es_ch) >= 0.3:
-        direction = "grinding higher" if es_ch > 0 else "drifting lower"
-        parts.append(f"Market {direction} in {session}. S&P {es_ch:+.2f}%, Nasdaq {nq_ch:+.2f}%.")
+    sectors_down = len(sectors) - sectors_up
+    sector_dispersion = (max(ch for _, ch in sectors) - min(ch for _, ch in sectors)) if len(sectors) >= 2 else 0
+
+    # NQ-ES spread (risk appetite signal)
+    nq_es_spread = nq_ch - es_ch
+
+    # ── Market regime ──
+    abs_move = abs(es_ch)
+    if abs_move > 1.5:
+        move_regime = "high_conviction"
+    elif abs_move > 0.5:
+        move_regime = "directional"
     else:
-        parts.append(f"Quiet tape. S&P flat at {es_ch:+.2f}%, Nasdaq {nq_ch:+.2f}%.")
-    
-    # VIX commentary - what it actually tells us
+        move_regime = "range_bound"
+
+    # VIX regime
     if vix_level >= 30:
-        parts.append(f"VIX at {vix_level:.0f} is screaming. This is fear, not concern. Usually means we're closer to a bottom than a top, but timing these is brutal.")
+        vol_regime = "crisis"
     elif vix_level >= 25:
-        parts.append(f"VIX at {vix_level:.0f}—hedging demand is real. The put buyers are active.")
+        vol_regime = "elevated_stress"
     elif vix_level >= 20:
-        parts.append(f"VIX sitting at {vix_level:.0f}. Market's nervous but not panicking.")
+        vol_regime = "above_average"
     elif vix_level >= 15:
-        parts.append(f"VIX at {vix_level:.0f}, pretty calm. Complacency or confidence? Hard to tell.")
+        vol_regime = "normal"
     else:
-        parts.append(f"VIX at {vix_level:.0f} is low. When everyone's comfortable, that's usually when something happens.")
-    
+        vol_regime = "compressed"
+
+    # ── BUILD MARKET SUMMARY ──
+    parts = []
+
+    # LEAD: tape characterization with levels
+    if move_regime == "high_conviction":
+        if es_ch > 0:
+            parts.append(f"Strong {session} bid across the complex — S&P futures trading {es_price:,.0f} ({es_ch:+.2f}%), Nasdaq {nq_ch:+.2f}%, Dow {dj_ch:+.2f}%.")
+        else:
+            if nq_ch < es_ch:
+                parts.append(f"Broad-based selling pressure in {session} — S&P futures at {es_price:,.0f} ({es_ch:+.2f}%), Nasdaq underperforming at {nq_ch:+.2f}%, Dow {dj_ch:+.2f}%.")
+            else:
+                parts.append(f"Heavy selling across indices in {session} — S&P at {es_price:,.0f} ({es_ch:+.2f}%), Nasdaq {nq_ch:+.2f}%, Dow {dj_ch:+.2f}%.")
+    elif move_regime == "directional":
+        direction = "higher" if es_ch > 0 else "lower"
+        parts.append(f"Indices grinding {direction} in {session} — S&P {es_price:,.0f} ({es_ch:+.2f}%), Nasdaq {nq_ch:+.2f}%, Dow {dj_ch:+.2f}%.")
+    else:
+        parts.append(f"Tight ranges in {session} with the S&P hovering around {es_price:,.0f} ({es_ch:+.2f}%), Nasdaq {nq_ch:+.2f}%, Dow {dj_ch:+.2f}%.")
+
+    # NQ-ES spread analysis
+    if abs(nq_es_spread) > 0.4:
+        if nq_es_spread > 0:
+            parts.append(f"Nasdaq is leading the S&P by {nq_es_spread:.1f}pp — growth/duration assets are in demand, suggesting funds are adding risk in the long-duration part of the curve.")
+        else:
+            parts.append(f"Nasdaq lagging the S&P by {abs(nq_es_spread):.1f}pp — classic risk-off rotation where funds trim growth exposure in favor of value and defensives.")
+
+    # VOL SURFACE
+    if vol_regime == "crisis":
+        parts.append(f"VIX at {vix_level:.1f} ({vix_ch:+.1f}%) is in crisis territory — vol sellers have stepped back and the skew is pricing tail risk aggressively. Dealer gamma positioning is likely short, which amplifies directional moves in both directions.")
+    elif vol_regime == "elevated_stress":
+        parts.append(f"VIX elevated at {vix_level:.1f} ({vix_ch:+.1f}%) — hedging demand remains firm and the term structure is likely inverted, signaling near-term event risk is being actively priced. Portfolio insurance is getting expensive.")
+    elif vol_regime == "above_average":
+        parts.append(f"VIX at {vix_level:.1f} ({vix_ch:+.1f}%) sits above the long-run mean, reflecting hedging activity in the options market but not outright panic. The vol surface suggests institutions are carrying protection but not aggressively adding.")
+    elif vol_regime == "compressed":
+        parts.append(f"VIX compressed at {vix_level:.1f} ({vix_ch:+.1f}%) — realized vol is running below implied, meaning premium sellers are in control. Low vol breeds complacency, and the risk here is a mean-reversion spike on any catalyst.")
+    else:
+        parts.append(f"VIX at {vix_level:.1f} ({vix_ch:+.1f}%) is trading in the normal band — no strong signal from the options market in either direction.")
+
     if abs(vix_ch) >= 10:
-        parts.append(f"Vol moved {vix_ch:+.0f}% today—that's notable.")
-    
-    # Sector rotation - what's actually leading
+        parts.append(f"The {abs(vix_ch):.0f}% vol-of-vol move is notable on its own and warrants attention to gamma exposure.")
+
+    # RATES / FIXED INCOME
+    if tnx_level > 0:
+        if abs(tnx_ch) > 2:
+            parts.append(f"The rates move is the story today — 10Y yield at {tnx_level:.2f}% ({tnx_ch:+.1f}%), a meaningful repricing of duration risk with direct implications for equity multiples, particularly in growth/tech where the duration sensitivity is highest.")
+        elif abs(tnx_ch) > 0.5:
+            parts.append(f"Treasuries moving — 10Y at {tnx_level:.2f}% ({tnx_ch:+.1f}%). The rate-equity correlation bears watching; equities have been increasingly sensitive to moves in the long end over the last several sessions.")
+        else:
+            parts.append(f"Rates stable with the 10Y at {tnx_level:.2f}% ({tnx_ch:+.1f}%) — no major repricing in fixed income, which removes one potential headwind for risk assets near-term.")
+
+    # COMMODITIES / CROSS-ASSET
+    commodity_signals = []
+    if gold_price > 0 and abs(gold_ch) > 0.3:
+        if gold_ch > 0:
+            commodity_signals.append(f"gold bid at ${gold_price:,.0f} ({gold_ch:+.1f}%) on safe-haven flows")
+        else:
+            commodity_signals.append(f"gold offered at ${gold_price:,.0f} ({gold_ch:+.1f}%) suggesting risk appetite is firming")
+    if oil_price > 0 and abs(oil_ch) > 0.5:
+        if oil_ch > 0:
+            commodity_signals.append(f"crude firmer at ${oil_price:.2f} ({oil_ch:+.1f}%) on supply-side dynamics")
+        else:
+            commodity_signals.append(f"crude weaker at ${oil_price:.2f} ({oil_ch:+.1f}%) pointing to demand concerns")
+    if dollar_idx > 0:
+        commodity_signals.append(f"DXY at {dollar_idx:.1f}")
+    if commodity_signals:
+        parts.append("Cross-asset: " + ", ".join(commodity_signals) + ".")
+
+    # SECTOR INTERNALS
     if sectors:
-        spread = top_sector[1] - bottom_sector[1]
-        if spread > 2:
-            parts.append(f"Wide dispersion today. {top_sector[0]} leading at +{top_sector[1]:.1f}%, {bottom_sector[0]} lagging at {bottom_sector[1]:.1f}%. Rotation is real.")
-        elif sectors_up >= 9:
-            parts.append(f"Broad strength—{sectors_up} of 11 sectors green. {top_sector[0]} best performer.")
-        elif sectors_up <= 3:
-            parts.append(f"Breadth is terrible. Only {sectors_up} sectors positive. {bottom_sector[0]} getting crushed.")
+        if sector_dispersion > 2.0:
+            parts.append(f"Sector dispersion is wide at {sector_dispersion:.1f}pp — {top_sectors[0][0]} leading ({top_sectors[0][1]:+.1f}%) while {bottom_sectors[-1][0]} lags ({bottom_sectors[-1][1]:+.1f}%). This kind of dispersion is characteristic of a rotational tape where stock/sector selection matters more than beta.")
+        elif sector_dispersion > 1.0:
+            parts.append(f"Breadth is mixed with {sectors_up} of {len(sectors)} sectors positive. Leadership from {top_sectors[0][0]} ({top_sectors[0][1]:+.1f}%), weakness concentrated in {bottom_sectors[-1][0]} ({bottom_sectors[-1][1]:+.1f}%). Moderate dispersion ({sector_dispersion:.1f}pp) — a stock-picker's tape.")
         else:
-            parts.append(f"Mixed internals. {top_sector[0]} outperforming, {bottom_sector[0]} weak.")
-    
-    # Cross-asset signals - what other markets are saying
-    signals = []
-    if gold_ch > 1.5:
-        signals.append("gold catching a bid")
-    elif gold_ch < -1.5:
-        signals.append("gold selling off")
-    if oil_ch > 3:
-        signals.append("crude ripping")
-    elif oil_ch < -3:
-        signals.append("oil getting hammered")
-    
-    if signals:
-        parts.append(f"Other markets: {', '.join(signals)}.")
-    
-    # Global context - keep it brief
-    if global_total > 0:
-        if global_up >= global_total - 1:
-            parts.append("Global markets all green overnight. Risk-on across the board.")
-        elif global_up <= 1:
-            parts.append("Weakness was global overnight. This isn't just a US story.")
-        elif global_up > global_total / 2:
-            parts.append(f"Overseas markets mostly higher ({global_up}/{global_total} up).")
-    
-    # Bottom line - give an actual view
-    bias = assessment.get('trading_bias', 'neutral')
-    
-    if bias in ['long', 'neutral_bullish']:
-        if es_ch > 0.5:
-            parts.append("Path of least resistance is higher. Don't fight the tape, but don't chase either.")
-        else:
-            parts.append("Despite the red, underlying tone isn't bad. Would buy weakness with a stop.")
-    elif bias in ['short', 'neutral_bearish']:
-        if es_ch < -0.5:
-            parts.append("Trend is your friend until it ends—and right now it's down. Stay defensive.")
-        else:
-            parts.append("Skeptical of this bounce. Rallies are for selling until proven otherwise.")
+            if sectors_up > sectors_down:
+                parts.append(f"Broad participation with {sectors_up}/{len(sectors)} sectors positive and narrow dispersion ({sector_dispersion:.1f}pp) — this correlated move reflects macro/index-level flows rather than fundamental rotation.")
+            else:
+                parts.append(f"Weakness is broad-based — {sectors_down}/{len(sectors)} sectors in the red with tight dispersion ({sector_dispersion:.1f}pp), suggesting systematic/index-level selling rather than idiosyncratic.")
+
+    # GLOBAL CONTEXT
+    if global_performance:
+        if avg_global_ch > 0.5:
+            parts.append(f"Global backdrop is constructive — {global_up}/{len(global_performance)} international indices higher overnight (avg {avg_global_ch:+.1f}%), providing a supportive setup for the US session.")
+        elif avg_global_ch < -0.5:
+            parts.append(f"International markets sold off overnight — {global_down}/{len(global_performance)} indices lower (avg {avg_global_ch:+.1f}%), setting a cautious tone heading into US trading.")
+        elif global_performance:
+            parts.append(f"Global markets were mixed overnight ({global_up} up, {global_down} down, avg {avg_global_ch:+.1f}%) — no strong directional cue from the international session.")
+
+    # FORWARD VIEW / POSITIONING
+    score = assessment.get('sentiment_score', 50)
+    if score >= 70:
+        parts.append("Weight of evidence tilts bullish — momentum, breadth, and cross-asset signals are aligned. The risk is getting caught offside if the tape reverses, so trailing stops and position sizing discipline are critical. The setup favors maintaining long exposure with selective profit-taking into strength.")
+    elif score >= 55:
+        parts.append("Conditions are modestly constructive but not screaming conviction. The positioning call is to stay long with modest size and let the market come to you — the risk-reward on new longs is adequate but not compelling enough to press aggressively.")
+    elif score >= 45:
+        parts.append("Market is in no-man's-land — signals are genuinely mixed, and the best risk-adjusted trade is reduced position sizing. Both bulls and bears can build a case here, which is exactly when discipline matters most.")
+    elif score >= 30:
+        parts.append("Balance of risks is skewing defensive. Hedging costs are worthwhile at current levels, and the prudent move is tightening stops and reducing gross exposure. The asymmetry on the long side has deteriorated meaningfully.")
     else:
-        parts.append("No strong edge here. Sitting on hands isn't the worst trade.")
-    
+        parts.append("Multiple risk signals flashing simultaneously — vol expansion, breadth deterioration, and cross-asset stress. Capital preservation takes priority. Focus on managing existing positions rather than initiating new risk.")
+
     market_summary = " ".join(parts)
-    
-    # === NEWS ANALYSIS ===
+
+    # ── NEWS ANALYSIS ──
     news_analysis = generate_news_analysis_paragraph(news_sentiment.get('items', []), news_sentiment, es_ch, sectors, assessment)
-    
+
     return market_summary, news_analysis
 
 
 def generate_news_analysis_paragraph(news_items, news_sentiment, market_change, sectors, assessment):
     """
-    Generate news analysis that sounds like a trader talking, not a bot.
+    Generate news flow analysis with institutional depth.
+    Covers: headline sentiment distribution, thematic drivers, price-narrative alignment,
+    and forward implications. Reads like a morning note from a macro desk.
     """
     if not news_items:
-        return "Light news day. Nothing moving the needle. Watch for overnight developments."
-    
+        return "Limited actionable news flow in the current session — the market is trading on technicals and positioning rather than headlines. Watch for overnight developments and Asian session catalysts."
+
     bullish = news_sentiment.get('bullish', 0)
     bearish = news_sentiment.get('bearish', 0)
+    total = bullish + bearish + news_sentiment.get('neutral', 0) if isinstance(news_sentiment.get('neutral'), int) else bullish + bearish
     overall = news_sentiment.get('overall', 'neutral')
-    
+
     parts = []
-    
-    # Quick sentiment read
-    if bullish > bearish + 3:
-        parts.append(f"Headlines leaning positive today ({bullish} bullish vs {bearish} bearish reads).")
+
+    # Sentiment distribution with context
+    if bullish > bearish * 2:
+        parts.append(f"News flow is decidedly positive — {bullish} constructive headlines versus {bearish} cautionary flags across {max(total, bullish+bearish)} monitored items. The skew is notable and suggests the narrative is supportive of risk-taking.")
+    elif bullish > bearish + 3:
+        parts.append(f"Headlines are leaning net positive ({bullish} bullish / {bearish} bearish), though the margin isn't overwhelming enough to drive positioning on its own.")
+    elif bearish > bullish * 2:
+        parts.append(f"News tape is heavily negative — {bearish} bearish signals dominating against {bullish} constructive items. When the headline flow is this one-sided, it typically feeds into sentiment-driven selling that can overshoot fundamental value.")
     elif bearish > bullish + 3:
-        parts.append(f"News flow is negative ({bearish} bearish signals vs {bullish} bullish).")
+        parts.append(f"Headline sentiment is tilting negative ({bearish} bearish / {bullish} bullish) — nothing alarming but the cautious tone is worth noting for position management.")
     else:
-        parts.append(f"Mixed headlines—{bullish} positive, {bearish} negative. No dominant narrative.")
-    
-    # Check for specific themes in news
-    all_titles = " ".join([n.get('title', '').lower() for n in news_items[:10]])
-    
+        parts.append(f"News flow is evenly split ({bullish} bullish / {bearish} bearish) — no dominant narrative emerging from the headlines, which means price action will be driven by flows and technicals rather than stories.")
+
+    # Thematic identification with market implications
+    all_titles = " ".join([n.get('title', '').lower() for n in news_items[:15]])
+
     themes_found = []
-    if 'fed' in all_titles or 'rate' in all_titles or 'powell' in all_titles:
-        themes_found.append("Fed chatter")
-    if 'earnings' in all_titles or 'beat' in all_titles or 'miss' in all_titles:
-        themes_found.append("earnings noise")
-    if 'tariff' in all_titles or 'china' in all_titles or 'trade' in all_titles:
-        themes_found.append("trade/tariff headlines")
-    if 'inflation' in all_titles or 'cpi' in all_titles:
-        themes_found.append("inflation talk")
-    if 'ai' in all_titles or 'nvidia' in all_titles or 'chip' in all_titles:
-        themes_found.append("AI/tech focus")
+    theme_implications = []
+
+    if any(w in all_titles for w in ['fed', 'rate', 'powell', 'fomc', 'monetary']):
+        themes_found.append("Fed/monetary policy")
+        if any(w in all_titles for w in ['cut', 'dovish', 'ease', 'pivot']):
+            theme_implications.append("Dovish Fed signaling is mechanically supportive for equity multiples — the discount rate compression benefits long-duration growth names disproportionately.")
+        elif any(w in all_titles for w in ['hike', 'hawkish', 'higher for longer', 'restrictive']):
+            theme_implications.append("Hawkish lean tightens financial conditions and compresses risk premiums — the most vulnerable names are leveraged plays and high-multiple growth stocks.")
     
+    if any(w in all_titles for w in ['earnings', 'beat', 'miss', 'revenue', 'guidance', 'quarter']):
+        themes_found.append("earnings")
+        if 'beat' in all_titles:
+            theme_implications.append("Earnings beats in this environment are getting rewarded — the market is paying up for fundamental delivery.")
+        elif 'miss' in all_titles:
+            theme_implications.append("Misses are being punished aggressively, consistent with a market that demands execution.")
+    
+    if any(w in all_titles for w in ['tariff', 'china', 'trade', 'sanction', 'geopolit']):
+        themes_found.append("trade/geopolitical risk")
+        theme_implications.append("Trade and geopolitical headlines inject uncertainty that's difficult to price — the market typically underreacts initially then overreacts once flows accelerate.")
+    
+    if any(w in all_titles for w in ['inflation', 'cpi', 'pce', 'price']):
+        themes_found.append("inflation")
+        theme_implications.append("Inflation data remains the macro variable with the highest information content for rate path expectations and, by extension, equity multiples.")
+    
+    if any(w in all_titles for w in ['ai', 'nvidia', 'chip', 'semiconductor', 'tech']):
+        themes_found.append("AI/technology")
+        theme_implications.append("AI capex cycle headlines continue to drive the semiconductor and hyperscaler complex — the key question is whether spending translates to durable revenue or peak-cycle investment.")
+    
+    if any(w in all_titles for w in ['oil', 'crude', 'opec', 'energy']):
+        themes_found.append("energy/commodities")
+    
+    if any(w in all_titles for w in ['housing', 'mortgage', 'real estate']):
+        themes_found.append("housing/real estate")
+
     if themes_found:
-        parts.append(f"Main drivers: {', '.join(themes_found[:3])}.")
+        parts.append(f"Dominant themes driving the tape: {', '.join(themes_found[:4])}.")
     
-    # Market reaction context
-    if overall == 'bullish' and market_change < -0.3:
-        parts.append("Interesting that we're down despite positive headlines. Tells you something about positioning.")
-    elif overall == 'bearish' and market_change > 0.3:
-        parts.append("Market shrugging off bad news. That's actually constructive.")
-    elif overall == 'bullish' and market_change > 0.5:
-        parts.append("Good news being rewarded. Market in a mood to buy.")
-    elif overall == 'bearish' and market_change < -0.5:
-        parts.append("Bad news hurting. No one stepping in to buy the dip yet.")
-    
-    # Specific story mention if available
-    if news_items and len(news_items[0].get('title', '')) > 20:
-        top_story = news_items[0]['title'][:80]
-        parts.append(f"Top story circulating: \"{top_story}...\"")
-    
-    return " ".join(parts) if parts else "Quiet on the news front. Price action driven by flows, not headlines."
+    if theme_implications:
+        parts.append(theme_implications[0])
+
+    # Top story callout
+    if news_items and len(news_items) > 0:
+        top = news_items[0]
+        top_title = top.get('title', '')
+        top_source = top.get('publisher', top.get('source', ''))
+        if len(top_title) > 20:
+            parts.append(f'Top story circulating: "{top_title[:85]}..." ({top_source}).')
+
+    # Price-narrative alignment (critical institutional signal)
+    if overall == 'bullish' and market_change > 0.3:
+        parts.append("Importantly, positive headlines are being rewarded in price — that alignment between narrative and tape is what you want to see in a healthy market. Smart money is buying the good news, not selling it.")
+    elif overall == 'bearish' and market_change < -0.3:
+        parts.append("The selling is consistent with headline tone — when bad news gets sold rather than absorbed, it signals the market lacks a bid and dip-buyers aren't stepping up at these levels.")
+    elif overall == 'bullish' and market_change < -0.2:
+        parts.append("Notable divergence: positive headlines but the tape is red. When good news can't lift prices, it tells you there's selling pressure underneath that the narrative isn't capturing. Pay attention to flows over stories.")
+    elif overall == 'bearish' and market_change > 0.2:
+        parts.append("Market is shrugging off negative headlines — that's actually a constructive signal. When bad news can't push prices lower, it often marks exhaustion of selling pressure and sets up a reversal.")
+
+    return " ".join(parts) if parts else "Quiet on the news front — the market is trading on positioning and technical levels rather than headlines."
 
 
 @st.cache_data(ttl=1800)
@@ -6669,29 +6765,38 @@ def main():
                     article_text = article_text[:15000]
                     text_lower = article_text.lower()
                     
-                    # === ANALYSIS ===
+                    # === ENHANCED ANALYSIS ===
                     
-                    # Key data points
+                    # Key data points - broader extraction
                     key_facts = []
                     sentences = article_text.replace('\n', ' ').split('.')
+                    important_terms = ['revenue', 'earnings', 'profit', 'gdp', 'inflation', 'rate', 'growth', 
+                                      'forecast', 'target', 'stock', 'market', 'fed', 'yield', 'basis points',
+                                      'consensus', 'estimate', 'quarter', 'margin', 'guidance', 'capex',
+                                      'demand', 'supply', 'employment', 'deficit', 'surplus', 'trade']
                     for sent in sentences:
                         sent = sent.strip()
                         if len(sent) < 20 or len(sent) > 350:
                             continue
-                        has_number = bool(re.search(r'\d+\.?\d*\s*(%|percent|billion|million|trillion|bps)', sent, re.IGNORECASE))
-                        has_term = any(t in sent.lower() for t in ['revenue', 'earnings', 'profit', 'gdp', 'inflation', 'rate', 'growth', 'forecast', 'target', 'stock', 'market', 'fed'])
-                        if has_number and has_term:
+                        has_number = bool(re.search(r'\d+\.?\d*\s*(%|percent|billion|million|trillion|bps|basis)', sent, re.IGNORECASE))
+                        term_score = sum(1 for t in important_terms if t in sent.lower())
+                        if has_number and term_score >= 1 and len(key_facts) < 8:
+                            key_facts.append(sent.strip())
+                        elif term_score >= 3 and has_number and len(key_facts) < 8:
                             key_facts.append(sent.strip())
                     
-                    # Themes
+                    # Enhanced themes
                     theme_map = {
-                        'Fed/Rates': ['fed', 'rate cut', 'rate hike', 'powell', 'fomc', 'hawkish', 'dovish'],
-                        'Inflation': ['inflation', 'cpi', 'pce', 'price pressure'],
-                        'Growth': ['gdp', 'recession', 'soft landing', 'jobs', 'unemployment'],
-                        'Trade/Tariffs': ['tariff', 'china', 'trade war', 'sanctions'],
-                        'Earnings': ['earnings', 'revenue', 'guidance', 'beat', 'miss', 'eps'],
-                        'Tech/AI': ['ai', 'nvidia', 'semiconductor', 'chip', 'tech'],
-                        'Energy': ['oil', 'crude', 'opec', 'energy'],
+                        'Fed/Monetary Policy': ['fed', 'federal reserve', 'rate cut', 'rate hike', 'powell', 'fomc', 'hawkish', 'dovish', 'monetary policy', 'quantitative'],
+                        'Earnings/Fundamentals': ['earnings', 'revenue', 'eps', 'profit', 'margin', 'guidance', 'beat', 'miss', 'quarterly results'],
+                        'Tech/AI': ['artificial intelligence', ' ai ', 'machine learning', 'semiconductor', 'chip', 'nvidia', 'data center', 'cloud'],
+                        'Geopolitical Risk': ['tariff', 'sanction', 'war', 'conflict', 'china', 'russia', 'geopolit', 'trade war', 'nato'],
+                        'Labor/Employment': ['jobs', 'employment', 'unemployment', 'payroll', 'labor', 'hiring', 'layoff', 'wage'],
+                        'Inflation/CPI': ['inflation', 'cpi', 'pce', 'price index', 'deflation', 'disinflation', 'consumer prices'],
+                        'Fiscal/Government': ['spending', 'deficit', 'debt ceiling', 'treasury', 'shutdown', 'fiscal', 'stimulus'],
+                        'Energy/Commodities': ['oil', 'crude', 'opec', 'natural gas', 'energy', 'commodity', 'gold', 'copper'],
+                        'Real Estate/Housing': ['housing', 'mortgage', 'real estate', 'home sales', 'construction'],
+                        'Banking/Credit': ['bank', 'credit', 'lending', 'loan', 'default', 'delinquenc', 'financial stability'],
                     }
                     
                     found_themes = []
@@ -6699,121 +6804,143 @@ def main():
                         if sum(1 for kw in keywords if kw in text_lower) >= 2:
                             found_themes.append(theme)
                     
-                    # Sentiment
-                    bull_words = ['surge', 'rally', 'beat', 'strong', 'growth', 'positive', 'bullish', 'outperform', 'soar', 'gain', 'recovery']
-                    bear_words = ['drop', 'fall', 'miss', 'weak', 'decline', 'bearish', 'underperform', 'crash', 'plunge', 'fear', 'recession']
+                    # Enhanced sentiment with more terms
+                    bull_words = ['surge', 'rally', 'beat', 'strong', 'growth', 'positive', 'bullish', 'outperform', 
+                                 'soar', 'gain', 'recovery', 'upgrade', 'exceeded', 'record', 'accelerat', 'optimis',
+                                 'raised guidance', 'above consensus', 'upside', 'breakout', 'momentum', 'tailwind']
+                    bear_words = ['drop', 'fall', 'miss', 'weak', 'decline', 'bearish', 'underperform', 'crash', 
+                                 'plunge', 'fear', 'recession', 'downgrade', 'below', 'cut', 'warning', 'headwind',
+                                 'lowered guidance', 'below consensus', 'deteriorat', 'hawkish', 'layoff', 'default']
                     
                     bull_count = sum(1 for w in bull_words if w in text_lower)
                     bear_count = sum(1 for w in bear_words if w in text_lower)
                     
-                    if bull_count > bear_count + 3:
+                    if bull_count > bear_count * 1.5:
                         sentiment = "Bullish"
                         sent_color = "#3fb950"
-                    elif bear_count > bull_count + 3:
+                        sent_bg = "rgba(63,185,80,0.1)"
+                    elif bear_count > bull_count * 1.5:
                         sentiment = "Bearish"
                         sent_color = "#f85149"
+                        sent_bg = "rgba(248,81,73,0.1)"
                     elif bull_count > bear_count:
-                        sentiment = "Lean Bullish"
+                        sentiment = "Moderately Bullish"
                         sent_color = "#7ee787"
+                        sent_bg = "rgba(126,231,135,0.1)"
                     elif bear_count > bull_count:
-                        sentiment = "Lean Bearish"
+                        sentiment = "Moderately Bearish"
                         sent_color = "#ffa198"
+                        sent_bg = "rgba(255,161,152,0.1)"
                     else:
                         sentiment = "Neutral"
                         sent_color = "#d29922"
+                        sent_bg = "rgba(210,153,34,0.1)"
                     
                     # Tickers mentioned
                     potential_tickers = set(re.findall(r'\b([A-Z]{2,5})\b', article_text))
                     known_tickers = set(OPTIONS_UNIVERSE) | {'SPY', 'QQQ', 'IWM', 'DIA', 'VIX', 'TLT', 'GLD', 'USO', 'XLF', 'XLE', 'XLK'}
-                    tickers = list(potential_tickers.intersection(known_tickers))[:6]
+                    tickers = list(potential_tickers.intersection(known_tickers))[:8]
                     
-                    # === GENERATE TAKE - Sound like a trader ===
-                    themes_str = ", ".join(found_themes[:3]) if found_themes else "general market stuff"
+                    # === GENERATE INSTITUTIONAL ANALYSIS ===
+                    analysis_parts = []
                     
-                    take_parts = []
+                    themes_str = " and ".join(found_themes[:3]) if found_themes else "broad market dynamics"
+                    analysis_parts.append(f"This piece centers on {themes_str}, and the overall read is {sentiment.lower()} ({bull_count} constructive signals vs {bear_count} cautionary flags).")
                     
-                    # Opening
-                    if sentiment in ['Bullish', 'Lean Bullish']:
-                        take_parts.append(f"Article is net positive—talking about {themes_str}.")
-                    elif sentiment in ['Bearish', 'Lean Bearish']:
-                        take_parts.append(f"Negative read here. Focus on {themes_str}.")
-                    else:
-                        take_parts.append(f"Pretty balanced piece covering {themes_str}.")
+                    # Theme-specific deep analysis
+                    if 'Fed/Monetary Policy' in found_themes:
+                        if any(w in text_lower for w in ['cut', 'dovish', 'ease', 'pivot']):
+                            analysis_parts.append("The monetary policy angle here is equity-supportive — any dovish pivot or rate cut signaling compresses risk premiums and mechanically lifts equity valuations, particularly in long-duration growth names. The key question is whether the market has already priced in the pivot, and at what pace cuts get delivered versus expectations.")
+                        elif any(w in text_lower for w in ['hike', 'hawkish', 'higher for longer', 'restrictive']):
+                            analysis_parts.append("The hawkish lean is a headwind for risk assets — higher real rates compress multiples, tighten financial conditions, and raise the hurdle rate for capital allocation. The most vulnerable exposures are leveraged positions and high-beta growth names where duration sensitivity is highest.")
+                        else:
+                            analysis_parts.append("The monetary policy signals here warrant close monitoring. The gap between market rate path expectations and the Fed's dot plot creates potential for repricing events — that dislocation is where both the opportunity and the risk live.")
                     
-                    # Key number if we have one
-                    if key_facts:
-                        take_parts.append(f"Key stat: \"{key_facts[0]}\"")
-                    
-                    # What it means
-                    if 'Fed/Rates' in found_themes:
-                        if 'cut' in text_lower:
-                            take_parts.append("Rate cut talk is equity-friendly, especially for growth names.")
-                        elif 'hike' in text_lower or 'hawkish' in text_lower:
-                            take_parts.append("Hawkish lean is a headwind. Watch long-duration stuff.")
-                    
-                    if 'Earnings' in found_themes:
-                        if 'beat' in text_lower:
-                            take_parts.append("Earnings beats usually get bought. Momentum play.")
-                        elif 'miss' in text_lower:
-                            take_parts.append("Misses get punished hard in this tape.")
+                    if 'Earnings/Fundamentals' in found_themes:
+                        if bull_count > bear_count:
+                            analysis_parts.append("The earnings data points are constructive — beats on revenue and EPS suggest underlying demand is holding up better than the consensus was positioned for. The important nuance is whether these beats are driven by genuine demand or by lowered bars and cost-cutting. Guidance revisions will tell the real story.")
+                        else:
+                            analysis_parts.append("The fundamental signals here are cautious. Margin pressure and/or revenue misses suggest the operating environment is tougher than the sell-side was modeling. Watch for estimate revisions cascading through the sector — these tend to cluster rather than occur in isolation.")
                     
                     if 'Tech/AI' in found_themes:
-                        take_parts.append("AI theme still has legs. Semis and hyperscalers leading.")
+                        analysis_parts.append("On the AI/tech theme: the key analytical question remains whether the capex cycle translates into durable revenue streams or whether we're in the investment phase of a cycle where returns lag expectations. Hyperscaler spending data is the leading indicator — if capex guidance stays elevated, the picks-and-shovels trade (semis, infrastructure) remains intact.")
                     
-                    if 'Trade/Tariffs' in found_themes:
-                        take_parts.append("Trade headlines add vol. Position accordingly.")
+                    if 'Geopolitical Risk' in found_themes:
+                        analysis_parts.append("Geopolitical risk is inherently difficult to price because the distribution of outcomes is fat-tailed. The market tends to underprice these risks until they crystallize, then overshoot. The hedge here is maintaining optionality through position sizing and explicit tail-risk protection rather than trying to time the headlines.")
                     
-                    # Bottom line
-                    if sentiment in ['Bullish', 'Lean Bullish']:
-                        take_parts.append("Bottom line: constructive. Would lean long on related names.")
-                    elif sentiment in ['Bearish', 'Lean Bearish']:
-                        take_parts.append("Bottom line: cautious. Either hedge or reduce.")
+                    if 'Inflation/CPI' in found_themes:
+                        analysis_parts.append("Inflation dynamics remain the macro variable with the highest information content for asset allocation. The direction and pace of disinflation directly drives the rate path, which drives equity multiples. Sticky services inflation versus goods deflation creates a bifurcated picture that headline numbers don't fully capture.")
+                    
+                    if 'Energy/Commodities' in found_themes:
+                        analysis_parts.append("Commodity price action feeds through to both the macro picture (via inflation expectations and consumer spending power) and sector-level earnings. The supply-demand balance in crude remains the swing factor — OPEC discipline, US shale production rates, and Chinese demand data are the three inputs that matter most.")
+                    
+                    if 'Banking/Credit' in found_themes:
+                        analysis_parts.append("Credit conditions are a leading indicator for broader economic health. Any tightening in lending standards or rise in delinquencies has second-order effects on consumer spending, business investment, and ultimately corporate earnings across the economy.")
+                    
+                    if 'Labor/Employment' in found_themes:
+                        analysis_parts.append("Labor market data sits at the intersection of the Fed's dual mandate — employment strength gives the Fed cover to stay restrictive, while weakness accelerates the pivot timeline. The nuance is in the composition: headline numbers vs participation, full-time vs part-time, and wage growth vs productivity.")
+                    
+                    # Data point synthesis
+                    if len(key_facts) >= 3:
+                        analysis_parts.append(f"The article surfaces {len(key_facts)} quantifiable data points worth tracking — these are the numbers that will either confirm or challenge the prevailing positioning in affected names.")
+                    
+                    # Positioning implications
+                    if 'Bullish' in sentiment:
+                        analysis_parts.append("Net assessment: the evidence here supports a constructive stance on the affected names and sectors. The risk-reward favors maintaining or selectively adding exposure, with the caveat that crowded positioning in consensus longs always carries reversal risk. Size accordingly and maintain stop discipline.")
+                    elif 'Bearish' in sentiment:
+                        analysis_parts.append("Net assessment: the risk flags in this piece are material. The appropriate response is evaluating existing exposure in affected sectors and tightening risk parameters — this doesn't necessarily mean going short, but it does mean respecting the signal and reducing positions where the thesis is no longer intact.")
                     else:
-                        take_parts.append("Bottom line: no strong edge from this alone. Need more data.")
+                        analysis_parts.append("Net assessment: the signal here is genuinely ambiguous — both bulls and bears can extract supporting evidence. This typically means the market trades sideways until a catalyzing data point resolves the uncertainty. Patient positioning and reduced size is the disciplined play.")
                     
-                    trader_take = " ".join(take_parts)
+                    full_analysis = " ".join(analysis_parts)
                     
-                    # === DISPLAY - CLEAN UI ===
-                    
+                    # === DISPLAY — CLEAN BUT INFORMATION-DENSE UI ===
                     source_domain = urlparse(url).netloc.replace('www.', '')
                     eastern = pytz.timezone('US/Eastern')
+                    timestamp = datetime.now(eastern).strftime('%I:%M %p ET')
                     
-                    # Header
-                    st.markdown(f"#### {title}")
-                    st.caption(f"{source_domain} · {datetime.now(eastern).strftime('%I:%M %p ET')}")
-                    
-                    # Sentiment badge
+                    # Header card
                     st.markdown(f"""
-                    <span style="background: {'rgba(63,185,80,0.2)' if 'Bullish' in sentiment else 'rgba(248,81,73,0.2)' if 'Bearish' in sentiment else 'rgba(210,153,34,0.2)'}; 
-                           color: {sent_color}; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
-                        {sentiment}
-                    </span>
+                    <div style="background: linear-gradient(135deg, rgba(22,27,34,0.95), rgba(13,17,23,0.95)); border: 1px solid rgba(88,166,255,0.2); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;">
+                        <h3 style="color: #ffffff; margin: 0 0 0.5rem 0; font-size: 1.15rem; line-height: 1.4;">{title}</h3>
+                        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <span style="color: #8b949e; font-size: 0.85rem;">{source_domain} · {timestamp}</span>
+                            <span style="background: {sent_bg}; color: {sent_color}; padding: 4px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid {sent_color}30;">{sentiment}</span>
+                            <span style="color: #8b949e; font-size: 0.8rem;">{bull_count} bullish / {bear_count} bearish signals</span>
+                        </div>
+                    </div>
                     """, unsafe_allow_html=True)
-                    
-                    st.markdown("---")
                     
                     # Themes
                     if found_themes:
-                        st.markdown("**Themes:**")
-                        st.markdown(" · ".join([f"`{t}`" for t in found_themes]))
+                        st.markdown("**Macro Themes:** " + " · ".join([f"`{t}`" for t in found_themes]))
                     
-                    # The Take
-                    st.markdown("**Quick Take:**")
-                    st.markdown(f"_{trader_take}_")
+                    st.markdown("---")
                     
-                    # Key Facts
+                    # Main analysis block
+                    st.markdown("##### 📊 Analyst Assessment")
+                    st.markdown(f"""
+                    <div style="background: rgba(22,27,34,0.6); border-left: 3px solid {sent_color}; padding: 1.2rem 1.5rem; border-radius: 0 8px 8px 0; margin: 0.5rem 0 1.5rem 0; line-height: 1.75; color: #e6edf3; font-size: 0.92rem;">
+                        {full_analysis}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Key data points
                     if key_facts:
-                        st.markdown("---")
-                        st.markdown("**Key Data Points:**")
-                        for i, fact in enumerate(key_facts[:4]):
-                            st.markdown(f"• {fact}.")
+                        st.markdown("##### 📈 Key Data Points")
+                        for fact in key_facts[:6]:
+                            st.markdown(f"""
+                            <div style="background: rgba(88,166,255,0.05); border: 1px solid rgba(88,166,255,0.15); border-radius: 6px; padding: 0.6rem 1rem; margin: 0.3rem 0; color: #c9d1d9; font-size: 0.88rem; line-height: 1.5;">
+                                {fact}.
+                            </div>
+                            """, unsafe_allow_html=True)
                     
                     # Tickers
                     if tickers:
                         st.markdown("---")
-                        st.markdown("**Tickers Mentioned:**")
-                        cols = st.columns(len(tickers))
-                        for i, ticker in enumerate(tickers):
+                        st.markdown("##### 🏷️ Tickers Referenced")
+                        cols = st.columns(min(6, len(tickers)))
+                        for i, ticker in enumerate(tickers[:6]):
                             with cols[i]:
                                 if st.button(ticker, key=f"res_{ticker}_{i}", use_container_width=True):
                                     st.session_state.selected_stock = ticker
@@ -6821,8 +6948,8 @@ def main():
                                     st.rerun()
                     
                     # Full text
-                    with st.expander("View Full Text"):
-                        st.text(article_text[:5000])
+                    with st.expander("📄 Full Article Text"):
+                        st.markdown(f'<div style="color: #8b949e; font-size: 0.85rem; line-height: 1.6; max-height: 400px; overflow-y: auto;">{article_text[:5000]}</div>', unsafe_allow_html=True)
                     
                 except Exception as e:
                     st.error(f"Couldn't read article: {str(e)}")
@@ -6831,8 +6958,8 @@ def main():
             st.markdown("""
             <div style="background: rgba(33,38,45,0.5); border: 1px dashed #30363d; border-radius: 8px; padding: 2rem; text-align: center; margin-top: 1rem;">
                 <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📰</div>
-                <div style="color: #8b949e;">Paste a news URL above for analysis</div>
-                <div style="color: #6e7681; font-size: 0.8rem; margin-top: 0.25rem;">Reuters, Bloomberg, WSJ, CNBC, etc.</div>
+                <div style="color: #8b949e;">Paste a news URL above for institutional-grade analysis</div>
+                <div style="color: #6e7681; font-size: 0.8rem; margin-top: 0.25rem;">Reuters, Bloomberg, WSJ, CNBC, FT, etc.</div>
             </div>
             """, unsafe_allow_html=True)
     
